@@ -1,8 +1,8 @@
 extern crate bincode;
-extern crate cosmo_ephemeris;
+extern crate temporal_ephemeris;
 extern crate serde;
 
-use cosmo_ephemeris_sys::*;
+use temporal_ephemeris_sys::*;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::fs::File;

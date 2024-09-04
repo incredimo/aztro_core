@@ -1,5 +1,5 @@
 [package]
-name = "cosmo_ephemeris"
+name = "temporal_ephemeris"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,6 @@ bincode = "1.3.3"
 chrono = "0.4.38"
 serde = { version = "1.0.209", features = ["derive"] }
 
-[dependencies.cosmo_ephemeris-sys-auto]
+[dependencies.temporal_ephemeris-sys-auto]
 version = "0.1.0"
-path = "../cosmo_ephemeris-sys"
+path = "../temporal_ephemeris-sys"

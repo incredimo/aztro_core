@@ -24,8 +24,8 @@ test:	all
 INCL = -I..
 
 CFLAGS = -std=gnu99 -fms-extensions -g -Wall -pthread -fPIC 
-LIBS = ../cosmo_ephemeris.a -lm  
-LIBSX = ../cosmo_ephemeris.a -lm  
+LIBS = ../temporal_ephemeris.a -lm  
+LIBSX = ../temporal_ephemeris.a -lm  
 CC=gcc	
 
 setest: $(OBJECTS)

@@ -28,9 +28,9 @@ fn main() {
     let pwd = env::var("CARGO_MANIFEST_DIR").unwrap();
     let pwd_path = Path::new(&pwd);
     let out_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR env var not set?"));
-    let cosmo_ephemeris_path =
-        PathBuf::from(env::var("RUST_cosmo_ephemeris_SYS_SOURCE").unwrap_or("vendor".to_owned()));
-    let clang_arg = format!("-I{}", cosmo_ephemeris_path.to_string_lossy());
+    let temporal_ephemeris_path =
+        PathBuf::from(env::var("RUST_temporal_ephemeris_SYS_SOURCE").unwrap_or("vendor".to_owned()));
+    let clang_arg = format!("-I{}", temporal_ephemeris_path.to_string_lossy());
 
     let mut build = cc::Build::new();
 
@@ -57,7 +57,7 @@ fn main() {
     .compile("swe");
 
     println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rustc-link-search={}", cosmo_ephemeris_path.to_string_lossy());
+    println!("cargo:rustc-link-search={}", temporal_ephemeris_path.to_string_lossy());
     println!("cargo:rustc-link-lib=swe");
 
     let macros = Arc::new(RwLock::new(HashSet::new()));

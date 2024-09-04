@@ -2379,7 +2379,7 @@ Sources:
 -   Dikshit, S(ankara) B(alkrishna), *Bharatiya Jyotish Sastra (History of Indian Astronomy)* (Tr. from Marathi), Govt. of India, 1969,
     part I & II.
     
--   Kollerstrom, Nick, „The Star Zodiac of Antiquity", in: *Culture & Cosmos*, Vol. 1, No.2, 1997).
+-   Kollerstrom, Nick, „The Star Zodiac of Antiquity", in: *Culture & temporals*, Vol. 1, No.2, 1997).
     
 -   Lahiri, N. C., *Panchanga Darpan* (in Bengali), Calcutta, 1967 (Astro Research Bureau).
     

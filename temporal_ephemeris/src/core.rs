@@ -2,8 +2,8 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Timelike;
 use chrono::Utc;
-use cosmo_ephemeris_sys::swe_get_planet_name;
-use cosmo_ephemeris_sys::{
+use temporal_ephemeris_sys::swe_get_planet_name;
+use temporal_ephemeris_sys::{
     swe_calc_ut, swe_close, swe_get_current_file_data, swe_get_library_path, swe_julday,
     swe_set_ephe_path, swe_set_jpl_file, swe_version, SE_GREG_CAL,
 };
@@ -39,12 +39,12 @@ macro_rules! function {
 fn assert_ephe_ready(fn_name: &str) {
     assert!(
         !CLOSED.is_completed(),
-        "Invoked cosmo_ephemeris function {} after closing the ephemeris files.",
+        "Invoked temporal_ephemeris function {} after closing the ephemeris files.",
         fn_name
     );
     assert!(
         SET_EPHE_PATH.is_completed(),
-        "Invoked cosmo_ephemeris function {} before calling set_ephe_path.",
+        "Invoked temporal_ephemeris function {} before calling set_ephe_path.",
         fn_name
     );
 }

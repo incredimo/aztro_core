@@ -4,9 +4,9 @@
   
   Author: Victor Reijs
   This program code is a translation of part of:
-  Victor Reijs' software ARCHAEOCOSMO (archaeoastronomy and
+  Victor Reijs' software ARCHAEOtemporal (archaeoastronomy and
   geodesy functions), 
-  http://www.iol.ie/~geniet/eng/archaeocosmoprocedures.htm
+  http://www.iol.ie/~geniet/eng/archaeotemporalprocedures.htm
 
   Translation from VB into C by Dieter Koch
 

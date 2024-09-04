@@ -1,4 +1,4 @@
-/*  cosmo_ephemeris-rs | Rust bindings for cosmo_ephemeris, the Swiss Ephemeris C library.
+/*  temporal_ephemeris-rs | Rust bindings for temporal_ephemeris, the Swiss Ephemeris C library.
  *  Copyright (c) 2021 incredimo. All rights reserved.
 
     This program is free software: you can redistribute it and/or modify
@@ -15,14 +15,14 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-extern crate cosmo_ephemeris;
+extern crate temporal_ephemeris;
 
 use chrono::{TimeZone, Utc};
-use cosmo_ephemeris::core::{Body, CalculationResult, Flag};
+use temporal_ephemeris::core::{Body, CalculationResult, Flag};
 
 fn main() {
-    cosmo_ephemeris::core::set_ephe_path(Option::None);
-    let julian_day_ut = cosmo_ephemeris::core::julday(Utc.ymd(1991, 10, 13).and_hms(20, 0, 0));
+    temporal_ephemeris::core::set_ephe_path(Option::None);
+    let julian_day_ut = temporal_ephemeris::core::julday(Utc.ymd(1991, 10, 13).and_hms(20, 0, 0));
     println!("Planet\tlon\tlat\tdist");
     let bodies = [
         Body::Sun,
@@ -41,11 +41,11 @@ fn main() {
             continue;
         }
         let flag_set = [Flag::HighPrecSpeed];
-        let calc_result = cosmo_ephemeris::core::calc_ut(julian_day_ut, body, &flag_set);
+        let calc_result = temporal_ephemeris::core::calc_ut(julian_day_ut, body, &flag_set);
         match calc_result {
             Ok(calc) => match calc {
                 CalculationResult::Body(body_result) => {
-                    let name = cosmo_ephemeris::core::get_planet_name(body);
+                    let name = temporal_ephemeris::core::get_planet_name(body);
                     println!(
                         "{}\t{}\t{}\t{}",
                         name,
@@ -59,5 +59,5 @@ fn main() {
             Err(err) => eprintln!("{}", err),
         }
     }
-    cosmo_ephemeris::core::close();
+    temporal_ephemeris::core::close();
 }

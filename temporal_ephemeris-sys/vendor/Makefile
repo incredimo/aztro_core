@@ -28,7 +28,7 @@ SWEOBJ = swedate.o swehouse.o swejpl.o swemmoon.o swemplan.o sweph.o\
 	 swephlib.o swecl.o swehel.o
 
 # build swetest with SE linked in, using dynamically linked system libraries libc, libm, libdl.
-swetest: swetest.o cosmo_ephemeris.a
+swetest: swetest.o temporal_ephemeris.a
 	$(CC) $(OP) -o swetest swetest.o -L. -lswe -lm -ldl
 
 # build a statically linked version of swetest. first find out where libc.a and libm.a reside,
@@ -37,20 +37,20 @@ swetest: swetest.o cosmo_ephemeris.a
 swetests: swetest.o $(SWEOBJ)
 	$(CC)  $(OP) -static -L/usr/lib/x86_64-linux-gnu/ -o swetests swetest.o $(SWEOBJ) -lm -ldl
 
-swevents: swevents.o cosmo_ephemeris.a
+swevents: swevents.o temporal_ephemeris.a
 	$(CC) $(OP) -o swevents swevents.o -L. -lswe -lm -ldl
 
-swemini: swemini.o cosmo_ephemeris.a
+swemini: swemini.o temporal_ephemeris.a
 	$(CC) $(OP) -o swemini swemini.o -L. -lswe -lm -ldl
 
 # create an archive and a dynamic link libary fro SwissEph
 # a user of this library will inlcude swephexp.h  and link with -lswe
 
-cosmo_ephemeris.a: $(SWEOBJ)
-	ar r cosmo_ephemeris.a	$(SWEOBJ)
+temporal_ephemeris.a: $(SWEOBJ)
+	ar r temporal_ephemeris.a	$(SWEOBJ)
 
-cosmo_ephemeris.so: $(SWEOBJ)
-	$(CC) -shared -o cosmo_ephemeris.so $(SWEOBJ)
+temporal_ephemeris.so: $(SWEOBJ)
+	$(CC) -shared -o temporal_ephemeris.so $(SWEOBJ)
 
 test:
 	cd setest && make && ./setest t
@@ -59,7 +59,7 @@ test.exp:
 	cd setest && make && ./setest -g t
 
 clean:
-	rm -f *.o swetest cosmo_ephemeris*
+	rm -f *.o swetest temporal_ephemeris*
 	cd setest && make clean
 	
 ###
