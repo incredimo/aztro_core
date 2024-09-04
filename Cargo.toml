@@ -1,0 +1,3 @@
+[workspace]
+members = ["cosmo_ephemeris-sys", "cosmo_ephemeris"]
+resolver = '2'
