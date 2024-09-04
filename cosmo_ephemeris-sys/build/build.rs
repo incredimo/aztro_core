@@ -1,5 +1,3 @@
-
-
 extern crate bindgen;
 
 use std::collections::HashSet;
@@ -34,22 +32,29 @@ fn main() {
         PathBuf::from(env::var("RUST_cosmo_ephemeris_SYS_SOURCE").unwrap_or("vendor".to_owned()));
     let clang_arg = format!("-I{}", cosmo_ephemeris_path.to_string_lossy());
 
-    cc::Build::new()
-        .flag("-g")
-        .flag("-Wall")
-        .flag("-fPIC")
-        .files([
-            pwd_path.join("vendor/swecl.c"),
-            pwd_path.join("vendor/swedate.c"),
-            pwd_path.join("vendor/swehel.c"),
-            pwd_path.join("vendor/swehouse.c"),
-            pwd_path.join("vendor/swejpl.c"),
-            pwd_path.join("vendor/swemmoon.c"),
-            pwd_path.join("vendor/swemplan.c"),
-            pwd_path.join("vendor/sweph.c"),
-            pwd_path.join("vendor/swephlib.c"),
-        ])
-        .compile("swe");
+    let mut build = cc::Build::new();
+
+    // Set different flags based on the target OS
+    if cfg!(target_os = "windows") {
+        build.flag("/W4"); // Warning level 4
+    } else {
+        build.flag("-g")
+            .flag("-Wall")
+            .flag("-fPIC");
+    }
+
+    build.files([
+        pwd_path.join("vendor/swecl.c"),
+        pwd_path.join("vendor/swedate.c"),
+        pwd_path.join("vendor/swehel.c"),
+        pwd_path.join("vendor/swehouse.c"),
+        pwd_path.join("vendor/swejpl.c"),
+        pwd_path.join("vendor/swemmoon.c"),
+        pwd_path.join("vendor/swemplan.c"),
+        pwd_path.join("vendor/sweph.c"),
+        pwd_path.join("vendor/swephlib.c"),
+    ])
+    .compile("swe");
 
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rustc-link-search={}", cosmo_ephemeris_path.to_string_lossy());

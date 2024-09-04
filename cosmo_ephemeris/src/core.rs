@@ -10,12 +10,13 @@ use cosmo_ephemeris_sys::{
 use std::env;
 use std::fmt;
 use std::str;
+use std::sync::Mutex;
 use std::sync::Once;
 use std::{path::Path, ptr::null_mut};
 
 const MAXCH: usize = 256;
 static SET_EPHE_PATH: Once = Once::new();
-static mut EPHE_PATH: String = String::new();
+static EPHE_PATH: Mutex<String> = Mutex::new(String::new());
 static CLOSED: Once = Once::new();
 
 // macro for getting the name of the current function.
@@ -158,17 +159,13 @@ pub fn set_ephe_path(path: Option<&str>) {
                     let mut mpath = path_str.to_owned();
                     unsafe {
                         swe_set_ephe_path(mpath.as_mut_ptr() as *mut i8);
-                        EPHE_PATH = mpath;
+                        *EPHE_PATH.lock().unwrap() = mpath;
                     }
                 }
                 None => unsafe { swe_set_ephe_path(null) },
             },
         }
     })
-}
-
-pub fn close() {
-    CLOSED.call_once(|| unsafe { swe_close() })
 }
 
 pub fn set_jpl_file(filename: &str) {
@@ -178,7 +175,10 @@ pub fn set_jpl_file(filename: &str) {
     assert!(filename.len() < MAXCH);
     let path = match env_ephe_path {
         Some(path_str) => Path::new(&path_str).join(filename),
-        None => unsafe { Path::new(&EPHE_PATH).join(filename) },
+        None => {
+            let ephe_path = EPHE_PATH.lock().unwrap();
+            Path::new(&*ephe_path).join(filename)
+        },
     };
     assert!(path.is_file());
     let mut mfilename = filename.to_owned();
@@ -186,6 +186,12 @@ pub fn set_jpl_file(filename: &str) {
         swe_set_jpl_file(mfilename.as_mut_ptr() as *mut i8);
     }
 }
+
+pub fn close() {
+    CLOSED.call_once(|| unsafe { swe_close() })
+}
+
+ 
 
 pub fn version() -> String {
     assert_ephe_ready(function!());
