@@ -21,43 +21,43 @@ use chrono::{TimeZone, Utc};
 use temporal_ephemeris::core::{Body, CalculationResult, Flag};
 
 fn main() {
-    temporal_ephemeris::core::set_ephe_path(Option::None);
-    let julian_day_ut = temporal_ephemeris::core::julday(Utc.ymd(1991, 10, 13).and_hms(20, 0, 0));
-    println!("Planet\tlon\tlat\tdist");
-    let bodies = [
-        Body::Sun,
-        Body::Moon,
-        Body::Mercury,
-        Body::Venus,
-        Body::Mars,
-        Body::Jupiter,
-        Body::Saturn,
-        Body::Neptune,
-        Body::Uranus,
-        Body::Pluto,
-    ];
-    for body in bodies {
-        if body == Body::Earth {
-            continue;
-        }
-        let flag_set = [Flag::HighPrecSpeed];
-        let calc_result = temporal_ephemeris::core::calc_ut(julian_day_ut, body, &flag_set);
-        match calc_result {
-            Ok(calc) => match calc {
-                CalculationResult::Body(body_result) => {
-                    let name = temporal_ephemeris::core::get_planet_name(body);
-                    println!(
-                        "{}\t{}\t{}\t{}",
-                        name,
-                        body_result.pos.get(0).unwrap(),
-                        body_result.pos.get(1).unwrap(),
-                        body_result.pos.get(2).unwrap()
-                    );
-                }
-                _ => (),
-            },
-            Err(err) => eprintln!("{}", err),
-        }
-    }
-    temporal_ephemeris::core::close();
+    // temporal_ephemeris::core::set_ephe_path(Option::None);
+    // let julian_day_ut = temporal_ephemeris::core::julday(Utc.ymd(1991, 10, 13).and_hms(20, 0, 0));
+    // println!("Planet\tlon\tlat\tdist");
+    // let bodies = [
+    //     Body::Sun,
+    //     Body::Moon,
+    //     Body::Mercury,
+    //     Body::Venus,
+    //     Body::Mars,
+    //     Body::Jupiter,
+    //     Body::Saturn,
+    //     Body::Neptune,
+    //     Body::Uranus,
+    //     Body::Pluto,
+    // ];
+    // for body in bodies {
+    //     if body == Body::Earth {
+    //         continue;
+    //     }
+    //     let flag_set = [Flag::HighPrecSpeed];
+    //     let calc_result = temporal_ephemeris::core::calc_ut(julian_day_ut, body, &flag_set);
+    //     match calc_result {
+    //         Ok(calc) => match calc {
+    //             CalculationResult::Body(body_result) => {
+    //                 let name = temporal_ephemeris::core::get_planet_name(body);
+    //                 println!(
+    //                     "{}\t{}\t{}\t{}",
+    //                     name,
+    //                     body_result.pos.get(0).unwrap(),
+    //                     body_result.pos.get(1).unwrap(),
+    //                     body_result.pos.get(2).unwrap()
+    //                 );
+    //             }
+    //             _ => (),
+    //         },
+    //         Err(err) => eprintln!("{}", err),
+    //     }
+    // }
+    // temporal_ephemeris::core::close();
 }
