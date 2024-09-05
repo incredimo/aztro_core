@@ -17,7 +17,7 @@ impl ParseCallbacks for MacroCallback {
         self.macros.write().unwrap().insert(name.into());
         match name {
             "FP_NAN" | "FP_INFINITE" | "FP_ZERO" | "FP_NORMAL" | "FP_SUBNORMAL" => {
-                return MacroParsingBehavior::Ignore
+                MacroParsingBehavior::Ignore
             }
             _ => MacroParsingBehavior::Default,
         }
@@ -26,17 +26,16 @@ impl ParseCallbacks for MacroCallback {
 
 fn main() {
     let pwd = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let vendor_path = Path::new(&pwd).join("vendor");
     let pwd_path = Path::new(&pwd);
     let out_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR env var not set?"));
-    let temporal_ephemeris_path =
-        PathBuf::from(env::var("RUST_temporal_ephemeris_SYS_SOURCE").unwrap_or("vendor".to_owned()));
+    let temporal_ephemeris_path = PathBuf::from(vendor_path);
     let clang_arg = format!("-I{}", temporal_ephemeris_path.to_string_lossy());
 
     let mut build = cc::Build::new();
 
-    // Set different flags based on the target OS
     if cfg!(target_os = "windows") {
-        build.flag("/W4"); // Warning level 4
+        build.flag("/W4");
     } else {
         build.flag("-g")
             .flag("-Wall")
@@ -57,6 +56,17 @@ fn main() {
     .compile("swe");
 
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=src/wrapper.h");
+    println!("cargo:rerun-if-changed=vendor/swecl.c");
+    println!("cargo:rerun-if-changed=vendor/swedate.c");
+    println!("cargo:rerun-if-changed=vendor/swehel.c");
+    println!("cargo:rerun-if-changed=vendor/swehouse.c");
+    println!("cargo:rerun-if-changed=vendor/swejpl.c");
+    println!("cargo:rerun-if-changed=vendor/swemmoon.c");
+    println!("cargo:rerun-if-changed=vendor/swemplan.c");
+    println!("cargo:rerun-if-changed=vendor/sweph.c");
+    println!("cargo:rerun-if-changed=vendor/swephlib.c");
+
     println!("cargo:rustc-link-search={}", temporal_ephemeris_path.to_string_lossy());
     println!("cargo:rustc-link-lib=swe");
 

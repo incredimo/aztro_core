@@ -1,3 +1,26 @@
-[workspace]
-members = ["temporal_ephemeris-sys", "temporal_ephemeris"]
-resolver = '2'
+[package]
+name = "temporal_ephemeris"
+version = "0.1.0"
+edition = "2021"
+authors = ["incredimo"]
+build = "build/build.rs"
+license = "AGPL-3.0+"
+description = "Rust bindings for temporal_ephemeris (the Swiss Ephemeris)."
+
+
+[lib]
+name = "temporal_ephemeris"
+
+[build-dependencies]
+bindgen = "0.59.1"
+cc = "1.0.70"
+
+[dependencies]
+approx = "0.5.1"
+serde = { version = "1.0.209", features = ["derive"] }
+tempfile = "3.12.0"
+
+
+[profile.dev]
+opt-level = 0
+incremental = true
