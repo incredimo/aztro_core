@@ -1,6 +1,6 @@
 [package]
 name = "aztro_core"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 authors = ["incredimo <aghil@xo.rs>"]
 build = "build/build.rs"
@@ -21,10 +21,16 @@ serde = { version = "1.0.209", features = ["derive"] }
 tempfile = "3.12.0"
 
 
+# incremental rebuild 
 [profile.dev]
-opt-level = 0
 incremental = true
 
+# build with optimizations
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
 
 
 
