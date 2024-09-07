@@ -3,7 +3,7 @@ name: temporal_ephemeris release
 on:
   push:
     branches:
-      - master
+      - main
 
 permissions:
   contents: write
