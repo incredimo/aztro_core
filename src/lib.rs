@@ -26,10 +26,42 @@ impl UtcDateTime {
     pub fn new(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
         UtcDateTime { year, month, day, hour, minute, second }
     }
+
+
+    pub fn to_julian_day(&self) -> f64 {
+        let hour = self.hour as f64 + self.minute as f64 / 60.0 + self.second as f64 / 3600.0;
+        unsafe {
+            swe_julday(
+                self.year,
+                self.month as i32,
+                self.day as i32,
+                hour,
+                SE_GREG_CAL as i32,
+            )
+        }
+    }
+
+    pub fn from_julian_day(julian_day: f64) -> Self {
+        let mut year = 0;
+        let mut month = 0;
+        let mut day = 0;
+        let mut hour = 0.0;
+
+        unsafe {
+            swe_revjul(julian_day, SE_GREG_CAL as i32, &mut year, &mut month, &mut day, &mut hour);
+        }
+
+        let total_seconds = (hour * 3600.0) as u32;
+        let hour = total_seconds / 3600;
+        let minute = (total_seconds % 3600) / 60;
+        let second = total_seconds % 60;
+
+        UtcDateTime { year, month: month as u32, day: day as u32, hour, minute, second }
+    }
 }
 
 #[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Body {
     EclipticNutation = -1,
     Sun = 0,
@@ -58,7 +90,7 @@ pub enum Body {
 const SIDEREAL_MODE: i32 = SE_SIDM_FAGAN_BRADLEY as i32;
 const SIDEREAL_MODE_TROPICAL: i32 = SE_SIDM_TRUE_CITRA as i32;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Flag {
     Speed = SEFLG_SPEED as isize,
     NoGravitationalDeflection = SEFLG_NOGDEFL as isize,
@@ -71,7 +103,7 @@ pub enum Flag {
     Heliocentric = SEFLG_HELCTR as isize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BodyInfo {
     pub longitude: f64,
     pub latitude: f64,
@@ -81,12 +113,58 @@ pub struct BodyInfo {
     pub speed_distance: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize )]
 pub struct EclipticObliquityInfo {
     pub ecliptic_true_obliquity: f64,
     pub ecliptic_mean_obliquity: f64,
     pub nutation_longitude: f64,
     pub nutation_obliquity: f64,
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize  )]
+pub enum House {
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Sixth,
+    Seventh,
+    Eighth,
+    Ninth,
+    Tenth,
+    Eleventh,
+    Twelfth,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ZodiacSign {
+    Aries,
+    Taurus,
+    Gemini,
+    Cancer,
+    Leo,
+    Virgo,
+    Libra,
+    Scorpio,
+    Sagittarius,
+    Capricorn,
+    Aquarius,
+    Pisces,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct HousePosition {
+    pub house: House,
+    pub sign: ZodiacSign,
+    pub degree: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Coordinate {
+    pub latitude: f64,
+    pub longitude: f64,
 }
 
 #[derive(Debug)]
@@ -206,7 +284,107 @@ impl SwissEph {
         }
         unsafe { CStr::from_ptr(name.as_ptr()) }.to_string_lossy().into_owned()
     }
+
+
+    pub fn calculate_houses_tropical(&self, date: UtcDateTime, latitude: f64, longitude: f64) -> Result<Vec<HousePosition>, CalculationError> {
+        self.calculate_houses(date, latitude, longitude, 'P' as i32, false)
+    }
+
+    pub fn calculate_houses_sidereal(&self, date: UtcDateTime, latitude: f64, longitude: f64) -> Result<Vec<HousePosition>, CalculationError> {
+        self.calculate_houses(date, latitude, longitude, 'P' as i32, true)
+    }
+
+    fn calculate_houses(&self, date: UtcDateTime, latitude: f64, longitude: f64, house_system: i32, is_sidereal: bool) -> Result<Vec<HousePosition>, CalculationError> {
+        let julian_day = self.date_to_julian(date);
+        let mut cusps: [f64; 13] = [0.0; 13];
+        let mut ascmc: [f64; 10] = [0.0; 10];
+        let mut error: [c_char; 256] = [0; 256];
+
+        let calc_result = unsafe {
+            if is_sidereal {
+                swe_set_sid_mode(SIDEREAL_MODE, 0.0, 0.0);
+                swe_houses_ex(
+                    julian_day,
+                    SEFLG_SIDEREAL as i32,
+                    latitude,
+                    longitude,
+                    house_system,
+                    cusps.as_mut_ptr(),
+                    ascmc.as_mut_ptr(),
+                )
+            } else {
+                swe_houses(
+                    julian_day,
+                    latitude,
+                    longitude,
+                    house_system,
+                    cusps.as_mut_ptr(),
+                    ascmc.as_mut_ptr(),
+                )
+            }
+        };
+
+        if calc_result < 0 {
+            let error_message = unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy().into_owned();
+            return Err(CalculationError {
+                code: calc_result,
+                message: error_message,
+            });
+        }
+
+        let mut house_positions: Vec<HousePosition> = Vec::new();
+        for i in 1..13 {
+            let house = match i {
+                1 => House::First,
+                2 => House::Second,
+                3 => House::Third,
+                4 => House::Fourth,
+                5 => House::Fifth,
+                6 => House::Sixth,
+                7 => House::Seventh,
+                8 => House::Eighth,
+                9 => House::Ninth,
+                10 => House::Tenth,
+                11 => House::Eleventh,
+                12 => House::Twelfth,
+                _ => unreachable!(),
+            };
+
+            let longitude = cusps[i];
+            let house_position = HousePosition {
+                house,
+                sign: self.get_sign_from_longitude(longitude),
+                degree: longitude % 30.0,
+            };
+
+            house_positions.push(house_position);
+        }
+
+        Ok(house_positions)
+    }
+
+    fn get_sign_from_longitude(&self, longitude: f64) -> ZodiacSign {
+        let normalized_longitude = longitude % 360.0;
+        match (normalized_longitude / 30.0) as usize {
+            0 => ZodiacSign::Aries,
+            1 => ZodiacSign::Taurus,
+            2 => ZodiacSign::Gemini,
+            3 => ZodiacSign::Cancer,
+            4 => ZodiacSign::Leo,
+            5 => ZodiacSign::Virgo,
+            6 => ZodiacSign::Libra,
+            7 => ZodiacSign::Scorpio,
+            8 => ZodiacSign::Sagittarius,
+            9 => ZodiacSign::Capricorn,
+            10 => ZodiacSign::Aquarius,
+            11 => ZodiacSign::Pisces,
+            _ => unreachable!(),
+        }
+    }
 }
+
+    
+
 
 impl Drop for SwissEph {
     fn drop(&mut self) {

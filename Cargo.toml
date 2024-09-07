@@ -1,6 +1,6 @@
 [package]
 name = "aztro_core"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 authors = ["incredimo <aghil@xo.rs>"]
 build = "build/build.rs"
@@ -31,6 +31,7 @@ opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+
 
 
 
