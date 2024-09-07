@@ -1,15 +1,15 @@
 [package]
-name = "temporal_ephemeris"
-version = "0.1.7"
+name = "aztro_core"
+version = "0.1.8"
 edition = "2021"
 authors = ["incredimo <aghil@xo.rs>"]
 build = "build/build.rs"
 license = "AGPL-3.0+"
-description = "Rust bindings for temporal_ephemeris (the Swiss Ephemeris)."
+description = "aztro core library"
 
 
 [lib]
-name = "temporal_ephemeris"
+name = "aztro_core"
 
 [build-dependencies]
 bindgen = "0.59.1"
@@ -24,6 +24,7 @@ tempfile = "3.12.0"
 [profile.dev]
 opt-level = 0
 incremental = true
+
 
 
 

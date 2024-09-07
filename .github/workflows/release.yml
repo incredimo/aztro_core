@@ -1,4 +1,4 @@
-name: temporal_ephemeris release
+name: aztro_core release
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.release_tag.outputs.RELEASE_TAG }}
-          release_name: temporal_ephemeris 🚀 release ${{ steps.release_tag.outputs.RELEASE_TAG }}
+          release_name: aztro_core 🚀 release ${{ steps.release_tag.outputs.RELEASE_TAG }}
           draft: false
           prerelease: false
 
@@ -69,6 +69,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create-release.outputs.release_upload_url }}
-          asset_path: ./target/x86_64-pc-windows-msvc/release/libtemporal_ephemeris.rlib
-          asset_name: libtemporal_ephemeris.rlib
+          asset_path: ./target/x86_64-pc-windows-msvc/release/libaztro_core.rlib
+          asset_name: libaztro_core.rlib
           asset_content_type: application/octet-stream

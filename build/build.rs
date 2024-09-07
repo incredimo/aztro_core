@@ -29,8 +29,8 @@ fn main() {
     let vendor_path = Path::new(&pwd).join("vendor");
     let pwd_path = Path::new(&pwd);
     let out_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR env var not set?"));
-    let temporal_ephemeris_path = PathBuf::from(vendor_path);
-    let clang_arg = format!("-I{}", temporal_ephemeris_path.to_string_lossy());
+    let aztro_core_path = PathBuf::from(vendor_path);
+    let clang_arg = format!("-I{}", aztro_core_path.to_string_lossy());
 
     let mut build = cc::Build::new();
 
@@ -67,7 +67,7 @@ fn main() {
     println!("cargo:rerun-if-changed=vendor/sweph.c");
     println!("cargo:rerun-if-changed=vendor/swephlib.c");
 
-    println!("cargo:rustc-link-search={}", temporal_ephemeris_path.to_string_lossy());
+    println!("cargo:rustc-link-search={}", aztro_core_path.to_string_lossy());
     println!("cargo:rustc-link-lib=swe");
 
     let macros = Arc::new(RwLock::new(HashSet::new()));

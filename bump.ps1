@@ -54,24 +54,24 @@ if ($local) {
 }
 $releaseMessage = "Release v$newVersion ($publishDate)"
 
-# Build in release mode and move the binaries to the release folder
-$releaseFolder = "./release"
-if (Test-Path $releaseFolder) {
-    Remove-Item -Recurse -Force $releaseFolder
-}
-New-Item -ItemType Directory -Path $releaseFolder | Out-Null
+# # Build in release mode and move the binaries to the release folder
+# $releaseFolder = "./release"
+# if (Test-Path $releaseFolder) {
+#     Remove-Item -Recurse -Force $releaseFolder
+# }
+# New-Item -ItemType Directory -Path $releaseFolder | Out-Null
 
-# Build for Windows
-cargo build --release --target x86_64-pc-windows-msvc
-Write-Output "🔨 Successfully built Windows binary"
-Move-Item -Path "./target/x86_64-pc-windows-msvc/release/libtemporal_ephemeris.rlib" -Destination $releaseFolder
-Write-Output "🎉 Successfully moved Windows binary to release folder"
+# # Build for Windows
+# cargo build --release --target x86_64-pc-windows-msvc
+# Write-Output "🔨 Successfully built Windows binary"
+# Move-Item -Path "./target/x86_64-pc-windows-msvc/release/libaztro_core.rlib" -Destination $releaseFolder
+# Write-Output "🎉 Successfully moved Windows binary to release folder"
 
-# Build for Linux
-# cargo build --release --target x86_64-unknown-linux-gnu
-# Write-Output "🔨 Successfully built Linux binary"
-# Move-Item -Path "./target/release/x86_64-unknown-linux-gnu/temporal_ephemeris" -Destination $releaseFolder
-# Write-Output "🎉 Successfully moved binaries to release folder"
+# # Build for Linux
+# # cargo build --release --target x86_64-unknown-linux-gnu
+# # Write-Output "🔨 Successfully built Linux binary"
+# # Move-Item -Path "./target/release/x86_64-unknown-linux-gnu/aztro_core" -Destination $releaseFolder
+# # Write-Output "🎉 Successfully moved binaries to release folder"
 
 # Add ALL files to git
 git add .
@@ -87,13 +87,13 @@ git tag -a "v$newVersion" -m "$releaseMessage"
 Write-Output "🎉 Pushing changes and tags to the repository..."
 git push && git push --tags
 
-# # Publish the package to crates.io directly
-# Write-Output "📦 Attempting to publish package to crates.io..."
-# cargo publish
-# if ($LASTEXITCODE -eq 0) {
-#     Write-Output "✨ Package successfully published to crates.io!"
-# } else {
-#     Write-Host "❌ Failed to publish package to crates.io. We did not update the crate." -ForegroundColor Red
-# }
-# Write-Output "🎉 Release v$newVersion completed!"
+# Publish the package to crates.io directly
+Write-Output "📦 Attempting to publish package to crates.io..."
+cargo publish
+if ($LASTEXITCODE -eq 0) {
+    Write-Output "✨ Package successfully published to crates.io!"
+} else {
+    Write-Host "❌ Failed to publish package to crates.io. We did not update the crate." -ForegroundColor Red
+}
+Write-Output "🎉 Release v$newVersion completed!"
 
