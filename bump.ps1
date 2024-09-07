@@ -62,11 +62,16 @@ if (Test-Path $releaseFolder) {
 New-Item -ItemType Directory -Path $releaseFolder | Out-Null
 
 # Build for Windows
-cargo build --release  
+cargo build --release --target x86_64-pc-windows-gnu
 Write-Output "🔨 Successfully built Windows binary"
 
+# Build for Linux
+cargo build --release --target x86_64-unknown-linux-gnu
+Write-Output "🔨 Successfully built Linux binary"
+
 # Move the binaries to the release folder
-Move-Item -Path "./target/release/*" -Destination $releaseFolder
+Move-Item -Path "./target/release/x86_64-pc-windows-gnu/libtemporal_ephemeris.dll" -Destination $releaseFolder
+Move-Item -Path "./target/release/x86_64-unknown-linux-gnu/libtemporal_ephemeris.so" -Destination $releaseFolder
 Write-Output "🎉 Successfully moved binaries to release folder"
 
 # Add ALL files to git
@@ -78,24 +83,6 @@ git commit -m "$commitMessage"
 # Tag the commit as a release with the release message
 git tag -a "v$newVersion" -m "$releaseMessage"
 
-if ($local) {
-    Write-Output "🏠 Running in local mode, building binaries for Windows and Linux..."
-
-    # Build for Windows
-    cargo build --release 
-
-    # Create a new release
-    $releaseId = New-RandomGuid
-    $releasePath = "releases/$releaseId"
-    New-Item -ItemType Directory -Path $releasePath | Out-Null
-
-    # Copy Windows binary to release directory
-    $windowsBinaryPath = "./target/x86_64-pc-windows-msvc/release/textra.exe"
-    Copy-Item -Path $windowsBinaryPath -Destination "$releasePath/textra-windows.exe"
-
-    Write-Output "🎉 Release v$newVersion completed locally! Binaries are available in $releasePath"
-    exit 0
-}
 
 # Push the commit and tag to your repository
 Write-Output "🎉 Pushing changes and tags to the repository..."
