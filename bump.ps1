@@ -64,14 +64,14 @@ New-Item -ItemType Directory -Path $releaseFolder | Out-Null
 # Build for Windows
 cargo build --release --target x86_64-pc-windows-msvc
 Write-Output "🔨 Successfully built Windows binary"
-Move-Item -Path "./target/release/x86_64-pc-windows-msvc/temporal_ephemeris.dll" -Destination $releaseFolder
+Move-Item -Path "./target/x86_64-pc-windows-msvc/release/libtemporal_ephemeris.rlib" -Destination $releaseFolder
 Write-Output "🎉 Successfully moved Windows binary to release folder"
 
 # Build for Linux
-cargo build --release --target x86_64-unknown-linux-gnu
-Write-Output "🔨 Successfully built Linux binary"
-Move-Item -Path "./target/release/x86_64-unknown-linux-gnu/temporal_ephemeris" -Destination $releaseFolder
-Write-Output "🎉 Successfully moved binaries to release folder"
+# cargo build --release --target x86_64-unknown-linux-gnu
+# Write-Output "🔨 Successfully built Linux binary"
+# Move-Item -Path "./target/release/x86_64-unknown-linux-gnu/temporal_ephemeris" -Destination $releaseFolder
+# Write-Output "🎉 Successfully moved binaries to release folder"
 
 # Add ALL files to git
 git add .
