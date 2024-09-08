@@ -12,29 +12,29 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 static INIT: Once = Once::new();
 static EPHE_FILE: &[u8] = include_bytes!("../ephe/sepl_18.se1");
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UtcDateTime {
-    pub year: i32,
-    pub month: u32,
-    pub day: u32,
-    pub hour: u32,
-    pub minute: u32,
-    pub second: u32,
+    pub data: i64,
 }
 
 impl UtcDateTime {
     pub fn new(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
-        UtcDateTime { year, month, day, hour, minute, second }
+        let data = (year as i64) * 10000000000 +
+                   (month as i64) * 100000000 +
+                   (day as i64) * 1000000 +
+                   (hour as i64) * 10000 +
+                   (minute as i64) * 100 +
+                   (second as i64);
+        UtcDateTime { data }
     }
 
-
     pub fn to_julian_day(&self) -> f64 {
-        let hour = self.hour as f64 + self.minute as f64 / 60.0 + self.second as f64 / 3600.0;
+        let hour = self.hour() as f64 + self.minute() as f64 / 60.0 + self.second() as f64 / 3600.0;
         unsafe {
             swe_julday(
-                self.year,
-                self.month as i32,
-                self.day as i32,
+                self.year(),
+                self.month() as i32,
+                self.day() as i32,
                 hour,
                 SE_GREG_CAL as i32,
             )
@@ -51,14 +51,42 @@ impl UtcDateTime {
             swe_revjul(julian_day, SE_GREG_CAL as i32, &mut year, &mut month, &mut day, &mut hour);
         }
 
-        let total_seconds = (hour * 3600.0) as u32;
-        let hour = total_seconds / 3600;
-        let minute = (total_seconds % 3600) / 60;
-        let second = total_seconds % 60;
+        let hour_int = hour as u32;
+        let minute = ((hour - hour_int as f64) * 60.0) as u32;
+        let second = ((hour - hour_int as f64 - minute as f64 / 60.0) * 3600.0) as u32;
 
-        UtcDateTime { year, month: month as u32, day: day as u32, hour, minute, second }
+        UtcDateTime::new(year, month as u32, day as u32, hour_int, minute, second)
+    }
+
+    pub fn day(&self) -> u32 {
+        ((self.data / 1000000) % 100) as u32
+    }
+
+    pub fn month(&self) -> u32 {
+        ((self.data / 100000000) % 100) as u32
+    }
+
+    pub fn year(&self) -> i32 {
+        (self.data / 10000000000) as i32
+    }
+
+    pub fn hour(&self) -> u32 {
+        ((self.data / 10000) % 100) as u32
+    }
+
+    pub fn minute(&self) -> u32 {
+        ((self.data / 100) % 100) as u32
+    }
+
+    pub fn second(&self) -> u32 {
+        (self.data % 100) as u32
+    }
+    
+    fn fractional_hour(&self) -> f64 {
+        self.hour() as f64 + self.minute() as f64 / 60.0 + self.second() as f64 / 3600.0
     }
 }
+
 
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,7 +190,7 @@ pub struct HousePosition {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Location {
+pub struct Coordinate {
     pub latitude: f64,
     pub longitude: f64,
 }
@@ -199,12 +227,12 @@ impl SwissEph {
     }
 
     fn date_to_julian(&self, date: UtcDateTime) -> f64 {
-        let hour = date.hour as f64 + date.minute as f64 / 60.0 + date.second as f64 / 3600.0;
+        let hour = date.fractional_hour();
         unsafe {
             swe_julday(
-                date.year,
-                date.month as i32,
-                date.day as i32,
+                date.year(),
+                date.month() as i32,
+                date.day() as i32,
                 hour,
                 SE_GREG_CAL as i32,
             )
