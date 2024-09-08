@@ -1,5 +1,7 @@
 #![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 
+
+
 use std::ffi::{CStr, CString};
 use std::io::Cursor;
 use std::os::raw::c_char;
@@ -11,7 +13,8 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 static INIT: Once = Once::new();
 static EPHE_FILE: &[u8] = include_bytes!("../ephe/sepl_18.se1");
-
+const SECONDS_PER_DAY: i64 = 86400;
+const DAYS_FROM_0_TO_1970: i64 = 719163;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UtcDateTime {
@@ -28,7 +31,7 @@ impl UtcDateTime {
         let second = second.into();
 
         let days = Self::days_from_ce(year, month, day);
-        let seconds = (days as i64 - DAYS_FROM_0_TO_1970 as i64) * SECONDS_PER_DAY as i64
+        let seconds = (days - DAYS_FROM_0_TO_1970) * SECONDS_PER_DAY
             + (hour as i64 * 3600 + minute as i64 * 60 + second as i64);
 
         UtcDateTime { timestamp: seconds }
@@ -51,26 +54,26 @@ impl UtcDateTime {
     }
 
     pub fn day(&self) -> u32 {
-        let (year, month, day) = self.ymd();
+        let (_, _, day) = self.ymd();
         day
     }
 
     pub fn month(&self) -> u32 {
-        let (year, month, day) = self.ymd();
+        let (_, month, _) = self.ymd();
         month
     }
 
     pub fn year(&self) -> i32 {
-        let (year, month, day) = self.ymd();
+        let (year, _, _) = self.ymd();
         year
     }
 
     pub fn hour(&self) -> u32 {
-        (self.timestamp % SECONDS_PER_DAY as i64 / 3600) as u32
+        ((self.timestamp % SECONDS_PER_DAY) / 3600) as u32
     }
 
     pub fn minute(&self) -> u32 {
-        (self.timestamp % 3600 / 60) as u32
+        ((self.timestamp % 3600) / 60) as u32
     }
 
     pub fn second(&self) -> u32 {
@@ -82,17 +85,17 @@ impl UtcDateTime {
     }
 
     fn ymd(&self) -> (i32, u32, u32) {
-        let days = self.timestamp / SECONDS_PER_DAY as i64 + DAYS_FROM_0_TO_1970 as i64;
+        let days = self.timestamp / SECONDS_PER_DAY + DAYS_FROM_0_TO_1970;
         Self::civil_from_days(days)
     }
 
-    fn days_from_ce(year: i32, month: u32, day: u32) -> u64 {
+    fn days_from_ce(year: i32, month: u32, day: u32) -> i64 {
         let y = year as i64 - 1;
         let era = (if y >= 0 { y } else { y - 399 }) / 400;
         let yoe = (y - era * 400) as u32;
-        let doy = (153 * (month + (if month > 2 { -3 } else { 9 })) + 2) / 5 + day - 1;
+        let doy = (153 * (month + if month > 2 { 9 } else { 3 }) + 2) / 5 + day - 1;
         let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-        (era * 146097 + doe as i64 - 719468) as u64
+        era * 146097 + doe as i64 - 719468
     }
 
     fn civil_from_days(days: i64) -> (i32, u32, u32) {
@@ -104,10 +107,20 @@ impl UtcDateTime {
         let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
         let mp = (5 * doy + 2) / 153;
         let d = doy - (153 * mp + 2) / 5 + 1;
-        let m = mp + (if mp < 10 { 3 } else { -9 });
-        (y + (if m <= 2 { 1 } else { 0 }), m, d)
+        let m = mp + if mp < 10 { 3 } else { 9 };
+        (y + if m <= 2 { 1 } else { 0 }, m as u32, d)
     }
 }
+
+
+
+
+
+
+
+
+
+
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Body {
