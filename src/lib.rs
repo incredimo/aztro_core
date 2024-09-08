@@ -162,7 +162,7 @@ pub struct HousePosition {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Coordinate {
+pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
 }
