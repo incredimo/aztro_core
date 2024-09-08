@@ -1,6 +1,6 @@
 [package]
 name = "aztro_core"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2021"
 authors = ["incredimo <aghil@xo.rs>"]
 build = "build/build.rs"
@@ -19,6 +19,7 @@ cc = "1.0.70"
 approx = "0.5.1"
 serde = { version = "1.0.209", features = ["derive"] }
 tempfile = "3.12.0"
+minimo = { path = "../minimo" , version = "0.1.11"}
 
 
 # incremental rebuild 
@@ -31,6 +32,7 @@ opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+
 
 
 
