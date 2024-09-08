@@ -12,82 +12,102 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 static INIT: Once = Once::new();
 static EPHE_FILE: &[u8] = include_bytes!("../ephe/sepl_18.se1");
 
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UtcDateTime {
-    pub data: i64,
+    timestamp: i64, // Seconds since Unix epoch
 }
 
 impl UtcDateTime {
-    pub fn new(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
-        let data = (year as i64) * 10000000000 +
-                   (month as i64) * 100000000 +
-                   (day as i64) * 1000000 +
-                   (hour as i64) * 10000 +
-                   (minute as i64) * 100 +
-                   (second as i64);
-        UtcDateTime { data }
+    pub fn new(year: impl Into<i32>, month: impl Into<u32>, day: impl Into<u32>, hour: impl Into<u32>, minute: impl Into<u32>, second: impl Into<u32>) -> Self {
+        let year = year.into();
+        let month = month.into();
+        let day = day.into();
+        let hour = hour.into();
+        let minute = minute.into();
+        let second = second.into();
+
+        let days = Self::days_from_ce(year, month, day);
+        let seconds = (days as i64 - DAYS_FROM_0_TO_1970 as i64) * SECONDS_PER_DAY as i64
+            + (hour as i64 * 3600 + minute as i64 * 60 + second as i64);
+
+        UtcDateTime { timestamp: seconds }
     }
 
     pub fn to_julian_day(&self) -> f64 {
-        let hour = self.hour() as f64 + self.minute() as f64 / 60.0 + self.second() as f64 / 3600.0;
-        unsafe {
-            swe_julday(
-                self.year(),
-                self.month() as i32,
-                self.day() as i32,
-                hour,
-                SE_GREG_CAL as i32,
-            )
-        }
+        let days_since_epoch = self.timestamp as f64 / SECONDS_PER_DAY as f64;
+        2440587.5 + days_since_epoch // Julian date for Unix epoch (1970-01-01) is 2440587.5
+    }
+
+    pub fn add_minutes(&self, minutes: i32) -> Self {
+        let new_timestamp = self.timestamp + (minutes as i64 * 60);
+        UtcDateTime { timestamp: new_timestamp }
     }
 
     pub fn from_julian_day(julian_day: f64) -> Self {
-        let mut year = 0;
-        let mut month = 0;
-        let mut day = 0;
-        let mut hour = 0.0;
-
-        unsafe {
-            swe_revjul(julian_day, SE_GREG_CAL as i32, &mut year, &mut month, &mut day, &mut hour);
-        }
-
-        let hour_int = hour as u32;
-        let minute = ((hour - hour_int as f64) * 60.0) as u32;
-        let second = ((hour - hour_int as f64 - minute as f64 / 60.0) * 3600.0) as u32;
-
-        UtcDateTime::new(year, month as u32, day as u32, hour_int, minute, second)
+        let days_since_epoch = julian_day - 2440587.5;
+        let seconds_since_epoch = (days_since_epoch * SECONDS_PER_DAY as f64) as i64;
+        UtcDateTime { timestamp: seconds_since_epoch }
     }
 
     pub fn day(&self) -> u32 {
-        ((self.data / 1000000) % 100) as u32
+        let (year, month, day) = self.ymd();
+        day
     }
 
     pub fn month(&self) -> u32 {
-        ((self.data / 100000000) % 100) as u32
+        let (year, month, day) = self.ymd();
+        month
     }
 
     pub fn year(&self) -> i32 {
-        (self.data / 10000000000) as i32
+        let (year, month, day) = self.ymd();
+        year
     }
 
     pub fn hour(&self) -> u32 {
-        ((self.data / 10000) % 100) as u32
+        (self.timestamp % SECONDS_PER_DAY as i64 / 3600) as u32
     }
 
     pub fn minute(&self) -> u32 {
-        ((self.data / 100) % 100) as u32
+        (self.timestamp % 3600 / 60) as u32
     }
 
     pub fn second(&self) -> u32 {
-        (self.data % 100) as u32
+        (self.timestamp % 60) as u32
     }
-    
-    fn fractional_hour(&self) -> f64 {
+
+    pub fn fractional_hour(&self) -> f64 {
         self.hour() as f64 + self.minute() as f64 / 60.0 + self.second() as f64 / 3600.0
     }
+
+    fn ymd(&self) -> (i32, u32, u32) {
+        let days = self.timestamp / SECONDS_PER_DAY as i64 + DAYS_FROM_0_TO_1970 as i64;
+        Self::civil_from_days(days)
+    }
+
+    fn days_from_ce(year: i32, month: u32, day: u32) -> u64 {
+        let y = year as i64 - 1;
+        let era = (if y >= 0 { y } else { y - 399 }) / 400;
+        let yoe = (y - era * 400) as u32;
+        let doy = (153 * (month + (if month > 2 { -3 } else { 9 })) + 2) / 5 + day - 1;
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        (era * 146097 + doe as i64 - 719468) as u64
+    }
+
+    fn civil_from_days(days: i64) -> (i32, u32, u32) {
+        let z = days + 719468;
+        let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+        let doe = (z - era * 146097) as u32;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe as i32 + era as i32 * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = mp + (if mp < 10 { 3 } else { -9 });
+        (y + (if m <= 2 { 1 } else { 0 }), m, d)
+    }
 }
-
-
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Body {
