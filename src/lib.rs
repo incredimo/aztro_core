@@ -7,7 +7,7 @@ use std::sync::Once;
 use serde::{Serialize, Deserialize};
 use tempfile::NamedTempFile;
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+include!("../build/bindings.rs");
 
 static INIT: Once = Once::new();
 static EPHE_FILE: &[u8] = include_bytes!("../ephe/sepl_18.se1");
