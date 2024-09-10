@@ -2,4 +2,7 @@
 .ccls-cache/
 /target
 */**/target
+**/target/**
 Cargo.lock
+*.lock
+

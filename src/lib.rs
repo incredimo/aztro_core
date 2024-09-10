@@ -9,7 +9,7 @@ use std::sync::Once;
 use serde::{Serialize, Deserialize};
 use tempfile::NamedTempFile;
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+include!("../build/bindings.rs");
 
 static INIT: Once = Once::new();
 static EPHE_FILE: &[u8] = include_bytes!("../ephe/sepl_18.se1");
@@ -20,6 +20,9 @@ const DAYS_FROM_0_TO_1970: i64 = 719163;
 pub struct UtcDateTime {
     timestamp: i64, // Seconds since Unix epoch
 }
+
+ 
+
 
 impl UtcDateTime {
     pub fn new(year: impl Into<i32>, month: impl Into<u32>, day: impl Into<u32>, hour: impl Into<u32>, minute: impl Into<u32>, second: impl Into<u32>) -> Self {
