@@ -1,6 +1,8 @@
 [package]
 name = "aztro_core"
-version = "0.1.11"
+ 
+version = "0.1.14"
+ 
 edition = "2021"
 authors = ["incredimo <aghil@xo.rs>"]
 build = "build/build.rs"
@@ -12,14 +14,14 @@ description = "aztro core library"
 name = "aztro_core"
 
 [build-dependencies]
+ 
 bindgen = "0.70.1"
 cc = "1.1.18"
+ 
 
 [dependencies]
 approx = "0.5.1"
 serde = { version = "1.0.209", features = ["derive"] }
 tempfile = "3.12.0"
 
-
  
-
