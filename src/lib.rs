@@ -69,7 +69,7 @@ pub enum ZodiacSign {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UtcDateTime {
+pub struct Timestamp {
     year: i32,
     month: u32,
     day: u32,
@@ -119,9 +119,83 @@ pub struct SwissEph {
     _temp_file: NamedTempFile,
 }
 
-impl UtcDateTime {
+pub fn days_in_month(year: i32, month: u32) -> i32 {
+    match month {
+        4 | 6 | 9 | 11 => 30,
+        2 => if is_leap_year(year) { 29 } else { 28 },
+        _ => 31,
+    }
+}
+
+pub fn is_leap_year(year: i32) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+ 
+
+
+impl Timestamp {
     pub fn new(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
-        UtcDateTime { year, month, day, hour, minute, second }
+        Timestamp { year, month, day, hour, minute, second }
+    }
+
+    pub fn from_utc(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
+        Timestamp { year, month, day, hour, minute, second }
+    }
+
+    pub fn from_local(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, timezone_offset: i32) -> Self {
+        // Calculate local time to UTC
+        let mut utc_hour = hour as i32 - timezone_offset;
+        let mut utc_day = day as i32;
+        let mut utc_month = month;
+        let mut utc_year = year;
+
+        // Handle day rollover
+        if utc_hour < 0 {
+            utc_hour += 24;
+            utc_day -= 1;
+        } else if utc_hour >= 24 {
+            utc_hour -= 24;
+            utc_day += 1;
+        }
+
+        // Handle month/year rollover
+        if utc_day < 1 {
+            utc_month -= 1;
+            if utc_month < 1 {
+                utc_month = 12;
+                utc_year -= 1;
+            }
+            utc_day = days_in_month(utc_year, utc_month);
+        } else if utc_day > days_in_month(utc_year, utc_month) {
+            utc_day = 1;
+            utc_month += 1;
+            if utc_month > 12 {
+                utc_month = 1;
+                utc_year += 1;
+            }
+        }
+
+        Timestamp { 
+            year: utc_year, 
+            month: utc_month, 
+            day: utc_day as u32, 
+            hour: utc_hour as u32, 
+            minute, 
+            second 
+        }
+    }
+
+    fn days_in_month(year: i32, month: u32) -> i32 {
+        match month {
+            4 | 6 | 9 | 11 => 30,
+            2 => if is_leap_year(year) { 29 } else { 28 },
+            _ => 31,
+        }
+    }
+
+    fn is_leap_year(year: i32) -> bool {
+        year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
     }
 
     pub fn to_julian_day(&self) -> f64 {
@@ -163,13 +237,13 @@ impl UtcDateTime {
                 &mut second,
             );
         }
-        UtcDateTime::new(year, month as u32, day as u32, hour as u32, minute as u32, second as u32)
+        Timestamp::new(year, month as u32, day as u32, hour as u32, minute as u32, second as u32)
     }
 
     pub fn add_minutes(&self, minutes: i32) -> Self {
         let mut jd = self.to_julian_day();
         jd += minutes as f64 / 1440.0; // 1440 minutes in a day
-        UtcDateTime::from_julian_day(jd)
+        Timestamp::from_julian_day(jd)
     }
 
     pub fn fractional_hour(&self) -> f64 {
@@ -194,7 +268,7 @@ impl SwissEph {
         SwissEph { _temp_file: temp_file }
     }
 
-    pub fn calculate(&self, coord_system: CoordinateSystem, date: &UtcDateTime, body: CelestialBody, flags: &[CalculationFlag]) -> Result<AstronomicalResult, CalculationError> {
+    pub fn calculate(&self, coord_system: CoordinateSystem, date: &Timestamp, body: CelestialBody, flags: &[CalculationFlag]) -> Result<AstronomicalResult, CalculationError> {
         let sidereal_mode = match coord_system {
             CoordinateSystem::Tropical => SE_SIDM_FAGAN_BRADLEY as i32,
             CoordinateSystem::Sidereal => SE_SIDM_LAHIRI as i32,
@@ -268,7 +342,7 @@ impl SwissEph {
         unsafe { CStr::from_ptr(name.as_ptr()) }.to_string_lossy().into_owned()
     }
 
-    pub fn calculate_houses(&self, coord_system: CoordinateSystem, date: &UtcDateTime, latitude: f64, longitude: f64) -> Result<Vec<HousePosition>, CalculationError> {
+    pub fn calculate_houses(&self, coord_system: CoordinateSystem, date: &Timestamp, latitude: f64, longitude: f64) -> Result<Vec<HousePosition>, CalculationError> {
         let julian_day = date.to_julian_day();
 
         let mut cusps: [f64; 13] = [0.0; 13];
@@ -367,7 +441,7 @@ mod tests {
     #[test]
     fn test_sun_position() {
         let eph = SwissEph::new();
-        let date = UtcDateTime::new(2023, 5, 17, 12, 0, 0);
+        let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
         
         let result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::Sun, &[CalculationFlag::Speed]).unwrap();
         
@@ -385,7 +459,7 @@ mod tests {
     #[test]
     fn test_house_positions() {
         let eph = SwissEph::new();
-        let date = UtcDateTime::new(2023, 5, 17, 12, 0, 0);
+        let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
         let latitude = 40.0;
         let longitude = 20.0;
         
@@ -399,7 +473,7 @@ mod tests {
 #[test]
 fn test_moon_position() {
     let eph = SwissEph::new();
-    let date = UtcDateTime::new(2023, 5, 17, 12, 0, 0);
+    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
     
     let result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::Moon, &[CalculationFlag::Speed]).unwrap();
     
@@ -419,7 +493,7 @@ fn test_moon_position() {
 #[test]
 fn test_ecliptic_obliquity() {
     let eph = SwissEph::new();
-    let date = UtcDateTime::new(2023, 5, 17, 12, 0, 0);
+    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
     
     let result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::EclipticNutation, &[]).unwrap();
     
@@ -440,7 +514,7 @@ fn test_ecliptic_obliquity() {
 #[test]
 fn test_sidereal_calculation() {
     let eph = SwissEph::new();
-    let date = UtcDateTime::new(2023, 5, 17, 12, 0, 0);
+    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
     
     let tropical_result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::Sun, &[]).unwrap();
     let sidereal_result = eph.calculate(CoordinateSystem::Sidereal, &date, CelestialBody::Sun, &[]).unwrap();
@@ -462,7 +536,7 @@ fn test_sidereal_calculation() {
 #[test]
 fn test_house_calculation() {
     let eph = SwissEph::new();
-    let date = UtcDateTime::new(2023, 5, 17, 12, 0, 0);
+    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
     let latitude = 40.7128; // New York City latitude
     let longitude = -74.0060; // New York City longitude
 
@@ -480,7 +554,7 @@ fn test_house_calculation() {
 
 #[test]
 fn test_utc_date_time() {
-    let date = UtcDateTime::new(2023, 5, 17, 12, 30, 45);
+    let date = Timestamp::new(2023, 5, 17, 12, 30, 45);
     assert_eq!(date.year, 2023);
     assert_eq!(date.month, 5);
     assert_eq!(date.day, 17);
@@ -489,7 +563,7 @@ fn test_utc_date_time() {
     assert_eq!(date.second, 45);
 
     let julian_day = date.to_julian_day();
-    let reconstructed_date = UtcDateTime::from_julian_day(julian_day);
+    let reconstructed_date = Timestamp::from_julian_day(julian_day);
     assert_eq!(date.year, reconstructed_date.year);
     assert_eq!(date.month, reconstructed_date.month);
     assert_eq!(date.day, reconstructed_date.day);
