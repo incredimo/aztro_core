@@ -25,6 +25,10 @@ impl ParseCallbacks for MacroCallback {
 }
 
 fn main() {
+
+    //to avoid unecessary rebuilds. only rebuild if the ./src is modified
+    println!("cargo:rerun-if-changed=./src");
+
     let pwd = env::var("CARGO_MANIFEST_DIR").unwrap();
     let vendor_path = Path::new(&pwd).join("vendor");
     let pwd_path = Path::new(&pwd);
