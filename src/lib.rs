@@ -78,6 +78,42 @@ pub struct Timestamp {
     second: u32,
 }
 
+impl Timestamp {
+  
+    pub fn year(&self) -> i32 {
+        self.year
+    }
+
+    pub fn month(&self) -> u32 {
+        self.month
+    }
+
+    pub fn day(&self) -> u32 {
+        self.day
+    }
+
+    pub fn hour(&self) -> u32 {
+        self.hour
+    }
+
+    pub fn minute(&self) -> u32 {
+        self.minute
+    }
+
+    pub fn second(&self) -> u32 {
+        self.second
+    }
+
+
+        
+    
+    
+
+             
+        
+    
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CelestialBodyInfo {
     pub longitude: f64,
@@ -143,46 +179,52 @@ impl Timestamp {
         Timestamp { year, month, day, hour, minute, second }
     }
 
-    pub fn from_local(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, timezone_offset: i32) -> Self {
+    pub fn from_local(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, timezone_offset: f64) -> Self {
         // Calculate local time to UTC
-        let mut utc_hour = hour as i32 - timezone_offset;
+        let mut utc_time = hour as f64 + minute as f64 / 60.0 + second as f64 / 3600.0 - timezone_offset;
         let mut utc_day = day as i32;
         let mut utc_month = month;
         let mut utc_year = year;
 
         // Handle day rollover
-        if utc_hour < 0 {
-            utc_hour += 24;
+        if utc_time < 0.0 {
+            utc_time += 24.0;
             utc_day -= 1;
-        } else if utc_hour >= 24 {
-            utc_hour -= 24;
+        } else if utc_time >= 24.0 {
+            utc_time -= 24.0;
             utc_day += 1;
         }
 
         // Handle month/year rollover
         if utc_day < 1 {
-            utc_month -= 1;
-            if utc_month < 1 {
-                utc_month = 12;
+            utc_month = if utc_month == 1 {
                 utc_year -= 1;
-            }
-            utc_day = days_in_month(utc_year, utc_month);
-        } else if utc_day > days_in_month(utc_year, utc_month) {
+                12
+            } else {
+                utc_month - 1
+            };
+            utc_day = Self::days_in_month(utc_year, utc_month);
+        } else if utc_day > Self::days_in_month(utc_year, utc_month) {
             utc_day = 1;
-            utc_month += 1;
-            if utc_month > 12 {
-                utc_month = 1;
+            utc_month = if utc_month == 12 {
                 utc_year += 1;
-            }
+                1
+            } else {
+                utc_month + 1
+            };
         }
+
+        let utc_hour = utc_time.floor() as u32;
+        let utc_minute = ((utc_time.fract() * 60.0).floor()) as u32;
+        let utc_second = ((utc_time.fract() * 3600.0) % 60.0).floor() as u32;
 
         Timestamp { 
             year: utc_year, 
             month: utc_month, 
             day: utc_day as u32, 
-            hour: utc_hour as u32, 
-            minute, 
-            second 
+            hour: utc_hour,
+            minute: utc_minute,
+            second: utc_second
         }
     }
 
@@ -580,3 +622,5 @@ fn test_get_body_name() {
     assert_eq!(eph.get_body_name(CelestialBody::Mercury), "Mercury");
 }
 }
+
+

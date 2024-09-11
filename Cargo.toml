@@ -1,7 +1,7 @@
 [package]
 name = "aztro_core"
  
-version = "0.1.16"
+version = "0.1.17"
  
 edition = "2021"
 authors = ["incredimo <aghil@xo.rs>"]
@@ -23,6 +23,7 @@ cc = "1.1.18"
 approx = "0.5.1"
 serde = { version = "1.0.209", features = ["derive"] }
 tempfile = "3.12.0"
-
+solar_time = "0.1.4"
  
+
 
