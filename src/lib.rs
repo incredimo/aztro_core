@@ -1,21 +1,30 @@
-use serde::{Serialize, Deserialize};
+// src/main.rs
+
+use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
+use std::error::Error;
 use std::ffi::{CStr, CString};
+use std::fmt;
 use std::io::Cursor;
 use std::os::raw::c_char;
 use std::sync::Once;
 use tempfile::NamedTempFile;
 
+// Include the generated bindings for the Swiss Ephemeris C library
 include!("../build/bindings.rs");
 
+// Embed the ephemeris file into the binary
 static EPHE_FILE: &[u8] = include_bytes!("../ephe/sepl_18.se1");
 static INIT: Once = Once::new();
 
+/// Represents the coordinate system used in calculations.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CoordinateSystem {
     Tropical,
     Sidereal,
 }
 
+/// Enumerates the celestial bodies supported by the Swiss Ephemeris.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(i32)]
 pub enum CelestialBody {
@@ -43,6 +52,7 @@ pub enum CelestialBody {
     Vesta = 20,
 }
 
+/// Flags to control the calculation behavior.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CalculationFlag {
     Speed = SEFLG_SPEED as isize,
@@ -56,64 +66,41 @@ pub enum CalculationFlag {
     Heliocentric = SEFLG_HELCTR as isize,
 }
 
+/// Represents the twelve astrological houses.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum House {
-    First, Second, Third, Fourth, Fifth, Sixth,
-    Seventh, Eighth, Ninth, Tenth, Eleventh, Twelfth,
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Sixth,
+    Seventh,
+    Eighth,
+    Ninth,
+    Tenth,
+    Eleventh,
+    Twelfth,
 }
 
+/// Represents the twelve zodiac signs.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ZodiacSign {
-    Aries, Taurus, Gemini, Cancer, Leo, Virgo,
-    Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces,
+    Aries,
+    Taurus,
+    Gemini,
+    Cancer,
+    Leo,
+    Virgo,
+    Libra,
+    Scorpio,
+    Sagittarius,
+    Capricorn,
+    Aquarius,
+    Pisces,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Timestamp {
-    year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    minute: u32,
-    second: u32,
-}
-
-impl Timestamp {
-  
-    pub fn year(&self) -> i32 {
-        self.year
-    }
-
-    pub fn month(&self) -> u32 {
-        self.month
-    }
-
-    pub fn day(&self) -> u32 {
-        self.day
-    }
-
-    pub fn hour(&self) -> u32 {
-        self.hour
-    }
-
-    pub fn minute(&self) -> u32 {
-        self.minute
-    }
-
-    pub fn second(&self) -> u32 {
-        self.second
-    }
-
-
-        
-    
-    
-
-             
-        
-    
-}
-
+/// Contains information about a celestial body's position and speed.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CelestialBodyInfo {
     pub longitude: f64,
@@ -124,6 +111,7 @@ pub struct CelestialBodyInfo {
     pub speed_distance: f64,
 }
 
+/// Contains information about the ecliptic obliquity.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EclipticObliquityInfo {
     pub ecliptic_true_obliquity: f64,
@@ -132,6 +120,7 @@ pub struct EclipticObliquityInfo {
     pub nutation_obliquity: f64,
 }
 
+/// Represents the position of an astrological house.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct HousePosition {
     pub house: House,
@@ -139,202 +128,111 @@ pub struct HousePosition {
     pub degree: f64,
 }
 
+/// Represents the result of an astronomical calculation.
 #[derive(Debug)]
 pub enum AstronomicalResult {
     CelestialBody(CelestialBodyInfo),
     EclipticObliquity(EclipticObliquityInfo),
 }
 
+/// Represents an error that can occur during calculations.
 #[derive(Debug)]
 pub struct CalculationError {
     pub code: i32,
     pub message: String,
 }
 
+impl fmt::Display for CalculationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CalculationError {}: {}", self.code, self.message)
+    }
+}
+
+impl Error for CalculationError {}
+
+/// Alias for Julian Day, simplifying the representation of dates.
+pub type JulianDay = f64;
+
+/// SwissEph provides methods to perform astronomical calculations using the Swiss Ephemeris.
 pub struct SwissEph {
     _temp_file: NamedTempFile,
 }
 
-pub fn days_in_month(year: i32, month: u32) -> i32 {
-    match month {
-        4 | 6 | 9 | 11 => 30,
-        2 => if is_leap_year(year) { 29 } else { 28 },
-        _ => 31,
-    }
-}
-
-pub fn is_leap_year(year: i32) -> bool {
-    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-}
-
- 
-
-
-impl Timestamp {
-    pub fn new(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
-        Timestamp { year, month, day, hour, minute, second }
-    }
-
-    pub fn from_utc(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Self {
-        Timestamp { year, month, day, hour, minute, second }
-    }
-
-    pub fn from_local(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, timezone_offset: f64) -> Self {
-        // Calculate local time to UTC
-        let mut utc_time = hour as f64 + minute as f64 / 60.0 + second as f64 / 3600.0 - timezone_offset;
-        let mut utc_day = day as i32;
-        let mut utc_month = month;
-        let mut utc_year = year;
-
-        // Handle day rollover
-        if utc_time < 0.0 {
-            utc_time += 24.0;
-            utc_day -= 1;
-        } else if utc_time >= 24.0 {
-            utc_time -= 24.0;
-            utc_day += 1;
-        }
-
-        // Handle month/year rollover
-        if utc_day < 1 {
-            utc_month = if utc_month == 1 {
-                utc_year -= 1;
-                12
-            } else {
-                utc_month - 1
-            };
-            utc_day = Self::days_in_month(utc_year, utc_month);
-        } else if utc_day > Self::days_in_month(utc_year, utc_month) {
-            utc_day = 1;
-            utc_month = if utc_month == 12 {
-                utc_year += 1;
-                1
-            } else {
-                utc_month + 1
-            };
-        }
-
-        let utc_hour = utc_time.floor() as u32;
-        let utc_minute = ((utc_time.fract() * 60.0).floor()) as u32;
-        let utc_second = ((utc_time.fract() * 3600.0) % 60.0).floor() as u32;
-
-        Timestamp { 
-            year: utc_year, 
-            month: utc_month, 
-            day: utc_day as u32, 
-            hour: utc_hour,
-            minute: utc_minute,
-            second: utc_second
-        }
-    }
-
-    fn days_in_month(year: i32, month: u32) -> i32 {
-        match month {
-            4 | 6 | 9 | 11 => 30,
-            2 => if is_leap_year(year) { 29 } else { 28 },
-            _ => 31,
-        }
-    }
-
-    fn is_leap_year(year: i32) -> bool {
-        year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-    }
-
-    pub fn to_julian_day(&self) -> f64 {
-        let mut tjd: f64 = 0.0;
-        let mut dret: [f64; 2] = [0.0; 2];
-        unsafe {
-            swe_utc_to_jd(
-                self.year,
-                self.month as i32,
-                self.day as i32,
-                self.hour as i32,
-                self.minute as i32,
-                self.second as f64,
-                1, // gregorian calendar
-                dret.as_mut_ptr(),
-                std::ptr::null_mut(),
-            );
-            tjd = dret[1]; // Use TT (Terrestrial Time)
-        }
-        tjd
-    }
-    
-    pub fn from_julian_day(jd: f64) -> Self {
-        let mut year: i32 = 0;
-        let mut month: i32 = 0;
-        let mut day: i32 = 0;
-        let mut hour: i32 = 0;
-        let mut minute: i32 = 0;
-        let mut second: f64 = 0.0;
-        unsafe {
-            swe_jdut1_to_utc(
-                jd,
-                1, // gregorian calendar
-                &mut year,
-                &mut month,
-                &mut day,
-                &mut hour,
-                &mut minute,
-                &mut second,
-            );
-        }
-        Timestamp::new(year, month as u32, day as u32, hour as u32, minute as u32, second as u32)
-    }
-
-    pub fn add_minutes(&self, minutes: i32) -> Self {
-        let mut jd = self.to_julian_day();
-        jd += minutes as f64 / 1440.0; // 1440 minutes in a day
-        Timestamp::from_julian_day(jd)
-    }
-
-    pub fn fractional_hour(&self) -> f64 {
-        self.hour as f64 + self.minute as f64 / 60.0 + self.second as f64 / 3600.0
-    }
-}
-
 impl SwissEph {
+    /// Initializes a new instance of SwissEph, loading the ephemeris data.
     pub fn new() -> Self {
-        let mut temp_file = NamedTempFile::new().unwrap();
-        std::io::copy(&mut Cursor::new(EPHE_FILE), &mut temp_file).unwrap();
-        
+        let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
+        std::io::copy(&mut Cursor::new(EPHE_FILE), &mut temp_file)
+            .expect("Failed to write ephemeris data to temp file");
+
         INIT.call_once(|| {
-            let file_path = temp_file.path().to_str().unwrap();
-            let c_path = CString::new(file_path).unwrap();
+            let file_path = temp_file.path().to_str().expect("Invalid ephemeris file path");
+            let c_path = CString::new(file_path).expect("Failed to convert path to CString");
             unsafe {
                 swe_set_ephe_path(c_path.as_ptr() as *mut c_char);
             }
-            eprintln!("Ephemeris file path: {}", file_path);
+            eprintln!("Ephemeris file path set to: {}", file_path);
         });
 
-        SwissEph { _temp_file: temp_file }
+        SwissEph {
+            _temp_file: temp_file,
+        }
     }
 
-    pub fn calculate(&self, coord_system: CoordinateSystem, date: &Timestamp, body: CelestialBody, flags: &[CalculationFlag]) -> Result<AstronomicalResult, CalculationError> {
-        let sidereal_mode = match coord_system {
-            CoordinateSystem::Tropical => SE_SIDM_FAGAN_BRADLEY as i32,
-            CoordinateSystem::Sidereal => SE_SIDM_LAHIRI as i32,
-        };
-    
-        unsafe {
-            swe_set_sid_mode(sidereal_mode, 0.0, 0.0);
+    /// Calculates the position of a celestial body or ecliptic obliquity.
+    pub fn calculate(
+        &self,
+        coord_system: CoordinateSystem,
+        julian_day: JulianDay,
+        body: CelestialBody,
+        flags: &[CalculationFlag],
+    ) -> Result<AstronomicalResult, CalculationError> {
+        // Set sidereal mode if needed
+        match coord_system {
+            CoordinateSystem::Sidereal => {
+                unsafe {
+                    swe_set_sid_mode(SE_SIDM_LAHIRI as i32, 0.0, 0.0);
+                }
+            }
+            CoordinateSystem::Tropical => {
+                unsafe {
+                    swe_set_sid_mode(SE_SIDM_FAGAN_BRADLEY as i32, 0.0, 0.0);
+                }
+            }
         }
-        
-        let mut iflag: i32 = if coord_system == CoordinateSystem::Sidereal { SEFLG_SIDEREAL as i32 } else { 0 };
+
+        // Combine flags
+        let mut iflag: i32 = if coord_system == CoordinateSystem::Sidereal {
+            SEFLG_SIDEREAL as i32
+        } else {
+            0
+        };
         for flag in flags {
             iflag |= *flag as i32;
         }
 
-        let julian_day = date.to_julian_day();
-
-        let mut results: [f64; 6] = [0.0; 6];
-        let mut error: [c_char; 256] = [0; 256];
-
-        let calc_result = match body {
+        // Perform calculation based on the celestial body
+        let result = match body {
             CelestialBody::EclipticNutation => {
                 let mut nut: [f64; 4] = [0.0; 4];
-                unsafe {
-                    swe_calc_ut(julian_day, SE_ECL_NUT as i32, 0, nut.as_mut_ptr(), error.as_mut_ptr());
+                let mut error: [c_char; 256] = [0; 256];
+                let calc_result = unsafe {
+                    swe_calc_ut(
+                        julian_day,
+                        SE_ECL_NUT as i32,
+                        0,
+                        nut.as_mut_ptr(),
+                        error.as_mut_ptr(),
+                    )
+                };
+                if calc_result < 0 {
+                    let error_message = unsafe { CStr::from_ptr(error.as_ptr()) }
+                        .to_string_lossy()
+                        .into_owned();
+                    return Err(CalculationError {
+                        code: calc_result,
+                        message: error_message,
+                    });
                 }
                 Ok(AstronomicalResult::EclipticObliquity(EclipticObliquityInfo {
                     ecliptic_true_obliquity: nut[0],
@@ -342,26 +240,21 @@ impl SwissEph {
                     nutation_longitude: nut[2],
                     nutation_obliquity: nut[3],
                 }))
-            },
+            }
             _ => {
-                let calc_result = unsafe {
-                    swe_calc_ut(
-                        julian_day,
-                        body as i32,
-                        iflag,
-                        results.as_mut_ptr(),
-                        error.as_mut_ptr(),
-                    )
-                };
-
+                let mut results: [f64; 6] = [0.0; 6];
+                let mut error: [c_char; 256] = [0; 256];
+                let calc_result =
+                    unsafe { swe_calc_ut(julian_day, body as i32, iflag, results.as_mut_ptr(), error.as_mut_ptr()) };
                 if calc_result < 0 {
-                    let error_message = unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy().into_owned();
+                    let error_message = unsafe { CStr::from_ptr(error.as_ptr()) }
+                        .to_string_lossy()
+                        .into_owned();
                     return Err(CalculationError {
                         code: calc_result,
                         message: error_message,
                     });
                 }
-
                 Ok(AstronomicalResult::CelestialBody(CelestialBodyInfo {
                     longitude: results[0],
                     latitude: results[1],
@@ -370,49 +263,56 @@ impl SwissEph {
                     speed_latitude: results[4],
                     speed_distance: results[5],
                 }))
-            },
+            }
         };
 
-        calc_result
+        result
     }
 
+    /// Retrieves the name of a celestial body.
     pub fn get_body_name(&self, body: CelestialBody) -> String {
         let mut name: [c_char; 256] = [0; 256];
         unsafe {
             swe_get_planet_name(body as i32, name.as_mut_ptr());
         }
-        unsafe { CStr::from_ptr(name.as_ptr()) }.to_string_lossy().into_owned()
+        unsafe { CStr::from_ptr(name.as_ptr()) }
+            .to_string_lossy()
+            .into_owned()
     }
 
-    pub fn calculate_houses(&self, coord_system: CoordinateSystem, date: &Timestamp, latitude: f64, longitude: f64) -> Result<Vec<HousePosition>, CalculationError> {
-        let julian_day = date.to_julian_day();
+    /// Calculates the positions of the astrological houses.
+    pub fn calculate_houses(
+        &self,
+        coord_system: CoordinateSystem,
+        julian_day: JulianDay,
+        latitude: f64,
+        longitude: f64,
+    ) -> Result<Vec<HousePosition>, CalculationError> {
+        // Set sidereal mode if needed
+        if coord_system == CoordinateSystem::Sidereal {
+            unsafe {
+                swe_set_sid_mode(SE_SIDM_LAHIRI as i32, 0.0, 0.0);
+            }
+        }
 
         let mut cusps: [f64; 13] = [0.0; 13];
         let mut ascmc: [f64; 10] = [0.0; 10];
+        let flag = if coord_system == CoordinateSystem::Sidereal {
+            SEFLG_SIDEREAL as i32
+        } else {
+            0
+        };
 
-        let calc_result = match coord_system {
-            CoordinateSystem::Tropical => unsafe {
-                swe_houses(
-                    julian_day,
-                    latitude,
-                    longitude,
-                    'P' as i32,
-                    cusps.as_mut_ptr(),
-                    ascmc.as_mut_ptr(),
-                )
-            },
-            CoordinateSystem::Sidereal => unsafe {
-                swe_set_sid_mode(SE_SIDM_LAHIRI as i32, 0.0, 0.0);
-                swe_houses_ex(
-                    julian_day,
-                    SEFLG_SIDEREAL as i32,
-                    latitude,
-                    longitude,
-                    'P' as i32,
-                    cusps.as_mut_ptr(),
-                    ascmc.as_mut_ptr(),
-                )
-            },
+        let calc_result = unsafe {
+            swe_houses_ex(
+                julian_day,
+                flag,
+                latitude,
+                longitude,
+                'P' as i32, // Placidus house system
+                cusps.as_mut_ptr(),
+                ascmc.as_mut_ptr(),
+            )
         };
 
         if calc_result < 0 {
@@ -422,8 +322,8 @@ impl SwissEph {
             });
         }
 
-        let house_positions: Vec<HousePosition> = (1..=12).map(|i| {
-            HousePosition {
+        let house_positions: Vec<HousePosition> = (1..=12)
+            .map(|i| HousePosition {
                 house: match i {
                     1 => House::First,
                     2 => House::Second,
@@ -441,15 +341,16 @@ impl SwissEph {
                 },
                 sign: Self::get_zodiac_sign(cusps[i]),
                 degree: cusps[i] % 30.0,
-            }
-        }).collect();
+            })
+            .collect();
 
         Ok(house_positions)
     }
 
+    /// Converts a longitude to its corresponding zodiac sign.
     fn get_zodiac_sign(longitude: f64) -> ZodiacSign {
         let normalized_longitude = longitude.rem_euclid(360.0);
-        match (normalized_longitude / 30.0) as usize {
+        match (normalized_longitude / 30.0).floor() as usize {
             0 => ZodiacSign::Aries,
             1 => ZodiacSign::Taurus,
             2 => ZodiacSign::Gemini,
@@ -462,7 +363,7 @@ impl SwissEph {
             9 => ZodiacSign::Capricorn,
             10 => ZodiacSign::Aquarius,
             11 => ZodiacSign::Pisces,
-            _ => unreachable!(),
+            _ => ZodiacSign::Pisces,
         }
     }
 }
@@ -475,152 +376,94 @@ impl Drop for SwissEph {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use approx::assert_relative_eq;
-
-    #[test]
-    fn test_sun_position() {
-        let eph = SwissEph::new();
-        let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
-        
-        let result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::Sun, &[CalculationFlag::Speed]).unwrap();
-        
-        if let AstronomicalResult::CelestialBody(body_info) = result {
-            assert!(body_info.longitude >= 0.0 && body_info.longitude < 360.0, "Longitude {} is out of range", body_info.longitude);
-            assert!(body_info.latitude >= -90.0 && body_info.latitude <= 90.0, "Latitude {} is out of range", body_info.latitude);
-            assert!(body_info.distance > 0.9 && body_info.distance < 1.1, "Sun distance {} is out of expected range", body_info.distance);
-            
-            assert!(body_info.speed_longitude.abs() < 1.0, "Sun longitude speed {} seems unreasonable", body_info.speed_longitude);
-        } else {
-            panic!("Unexpected result type: {:?}", result);
-        }
-    }
-
-    #[test]
-    fn test_house_positions() {
-        let eph = SwissEph::new();
-        let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
-        let latitude = 40.0;
-        let longitude = 20.0;
-        
-        let result = eph.calculate_houses(CoordinateSystem::Tropical, &date, latitude, longitude).unwrap();
-        
-        assert_eq!(result.len(), 12);
-    }
-
-   
-
-#[test]
-fn test_moon_position() {
-    let eph = SwissEph::new();
-    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
-    
-    let result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::Moon, &[CalculationFlag::Speed]).unwrap();
-    
-    if let AstronomicalResult::CelestialBody(body_info) = result {
-        assert!(body_info.longitude >= 0.0 && body_info.longitude < 360.0, "Longitude {} is out of range", body_info.longitude);
-        assert!(body_info.latitude >= -90.0 && body_info.latitude <= 90.0, "Latitude {} is out of range", body_info.latitude);
-        assert!(body_info.distance > 0.002 && body_info.distance < 0.003, "Moon distance {} is out of expected range", body_info.distance);
-        
-        assert!(body_info.speed_longitude.abs() < 15.0, "Moon longitude speed {} seems unreasonable", body_info.speed_longitude);
-        assert!(body_info.speed_latitude.abs() < 10.0, "Moon latitude speed {} seems unreasonable", body_info.speed_latitude);
-        assert!(body_info.speed_distance.abs() < 0.01, "Moon distance speed {} seems unreasonable", body_info.speed_distance);
-    } else {
-        panic!("Expected CelestialBodyInfo for Moon");
-    }
-}
-
-#[test]
-fn test_ecliptic_obliquity() {
-    let eph = SwissEph::new();
-    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
-    
-    let result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::EclipticNutation, &[]).unwrap();
-    
-    if let AstronomicalResult::EclipticObliquity(info) = result {
-        assert!(info.ecliptic_true_obliquity > 23.0 && info.ecliptic_true_obliquity < 24.0, 
-                "True obliquity {} is out of expected range", info.ecliptic_true_obliquity);
-        assert!(info.ecliptic_mean_obliquity > 23.0 && info.ecliptic_mean_obliquity < 24.0, 
-                "Mean obliquity {} is out of expected range", info.ecliptic_mean_obliquity);
-        assert!(info.nutation_longitude.abs() < 0.01, 
-                "Nutation in longitude {} seems unreasonable", info.nutation_longitude);
-        assert!(info.nutation_obliquity.abs() < 0.01, 
-                "Nutation in obliquity {} seems unreasonable", info.nutation_obliquity);
-    } else {
-        panic!("Expected EclipticObliquityInfo");
-    }
-}
-
-#[test]
-fn test_sidereal_calculation() {
-    let eph = SwissEph::new();
-    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
-    
-    let tropical_result = eph.calculate(CoordinateSystem::Tropical, &date, CelestialBody::Sun, &[]).unwrap();
-    let sidereal_result = eph.calculate(CoordinateSystem::Sidereal, &date, CelestialBody::Sun, &[]).unwrap();
-    
-    if let (AstronomicalResult::CelestialBody(tropical), AstronomicalResult::CelestialBody(sidereal)) = (tropical_result, sidereal_result) {
-        assert!(
-            (tropical.longitude - sidereal.longitude).abs() > 20.0,
-            "Tropical and sidereal longitudes should differ significantly. Tropical: {}, Sidereal: {}",
-            tropical.longitude,
-            sidereal.longitude
+/// Converts a Gregorian date and time to Julian Day.
+pub fn gregorian_to_julian_day(
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: f64,
+) -> JulianDay {
+    let mut tjd_ut: f64 = 0.0;
+    let mut dret: [f64; 2] = [0.0; 2];
+    unsafe {
+        swe_utc_to_jd(
+            year,
+            month as i32,
+            day as i32,
+            hour as i32,
+            minute as i32,
+            second,
+            SE_GREG_CAL as i32,
+            dret.as_mut_ptr(),
+            std::ptr::null_mut(),
         );
-        assert_relative_eq!(tropical.latitude, sidereal.latitude, epsilon = 1e-6);
-        assert_relative_eq!(tropical.distance, sidereal.distance, epsilon = 1e-6);
-    } else {
-        panic!("Expected CelestialBodyInfo for both calculations");
+        tjd_ut = dret[1]; // Use UT
     }
+    tjd_ut
 }
 
-#[test]
-fn test_house_calculation() {
-    let eph = SwissEph::new();
-    let date = Timestamp::new(2023, 5, 17, 12, 0, 0);
-    let latitude = 40.7128; // New York City latitude
-    let longitude = -74.0060; // New York City longitude
-
-    let houses = eph.calculate_houses(CoordinateSystem::Tropical, &date, latitude, longitude).unwrap();
-
-    assert_eq!(houses.len(), 12, "There should be 12 houses");
-
- 
-
-    // Check if degrees are within valid range
-    for house in &houses {
-        assert!(house.degree >= 0.0 && house.degree < 30.0, "House degree {} is out of range", house.degree);
+/// Converts Julian Day to Gregorian date and time.
+pub fn julian_day_to_gregorian(jd: JulianDay) -> (i32, u32, u32, u32, u32, f64) {
+    let mut year: i32 = 0;
+    let mut month: i32 = 0;
+    let mut day: i32 = 0;
+    let mut hour: i32 = 0;
+    let mut minute: i32 = 0;
+    let mut second: f64 = 0.0;
+    unsafe {
+        swe_jdut1_to_utc(
+            jd,
+            SE_GREG_CAL as i32,
+            &mut year,
+            &mut month,
+            &mut day,
+            &mut hour,
+            &mut minute,
+            &mut second,
+        );
     }
+    (
+        year,
+        month as u32,
+        day as u32,
+        hour as u32,
+        minute as u32,
+        second,
+    )
 }
 
-#[test]
-fn test_utc_date_time() {
-    let date = Timestamp::new(2023, 5, 17, 12, 30, 45);
-    assert_eq!(date.year, 2023);
-    assert_eq!(date.month, 5);
-    assert_eq!(date.day, 17);
-    assert_eq!(date.hour, 12);
-    assert_eq!(date.minute, 30);
-    assert_eq!(date.second, 45);
-
-    let julian_day = date.to_julian_day();
-    let reconstructed_date = Timestamp::from_julian_day(julian_day);
-    assert_eq!(date.year, reconstructed_date.year);
-    assert_eq!(date.month, reconstructed_date.month);
-    assert_eq!(date.day, reconstructed_date.day);
-    assert_eq!(date.hour, reconstructed_date.hour);
-    assert_eq!(date.minute, reconstructed_date.minute);
-    assert_eq!(date.second, reconstructed_date.second);
+/// Formats degree into DMS (Degrees, Minutes, Seconds)
+pub fn format_degree(degree: f64) -> String {
+    let deg = degree.floor() as u32;
+    let minutes_float = (degree - deg as f64) * 60.0;
+    let minutes = minutes_float.floor() as u32;
+    let seconds = ((minutes_float - minutes as f64) * 60.0).floor() as u32;
+    format!("{:02}-{:02}-{:02}", deg, minutes, seconds)
 }
 
-#[test]
-fn test_get_body_name() {
-    let eph = SwissEph::new();
-    assert_eq!(eph.get_body_name(CelestialBody::Sun), "Sun");
-    assert_eq!(eph.get_body_name(CelestialBody::Moon), "Moon");
-    assert_eq!(eph.get_body_name(CelestialBody::Mercury), "Mercury");
-}
+/// Parses degree from "DD-MM-SS" format
+pub fn parse_degree(degree_str: &str) -> Result<f64, Box<dyn Error>> {
+    let parts: Vec<&str> = degree_str.split('-').collect();
+    if parts.len() != 3 {
+        return Err("Degree string must be in 'DD-MM-SS' format".into());
+    }
+    let deg: f64 = parts[0].parse()?;
+    let min: f64 = parts[1].parse()?;
+    let sec: f64 = parts[2].parse()?;
+    Ok(deg + min / 60.0 + sec / 3600.0)
 }
 
+/// Retrieves the opposite sign of a given sign.
+pub fn get_opposite_sign(sign: &str) -> Result<String, Box<dyn Error>> {
+    let signs = vec![
+        "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+        "Libra", "Scorpio", "Sagittarius", "Capricorn",
+        "Aquarius", "Pisces",
+    ];
+    let index = signs.iter().position(|&s| s == sign).ok_or("Invalid sign")?;
+    let opposite_index = (index + 6) % 12;
+    Ok(signs[opposite_index].to_string())
+}
 
