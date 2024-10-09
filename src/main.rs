@@ -15,6 +15,6 @@ fn main() {
 
     match generate_vedic_astrology_report(&eph, birth_info) {
         Ok(report) => println!("{:#?}", report),
-        Err(e) => eprintln!("Error: {}", e),
+        Err(e) => eprintln!("Error: {:?}", e),
     }
 }
