@@ -1,4 +1,4 @@
-use aztro_core::{  generate_vedic_astrology_report, AstronomicalResult, BirthInfo,  CelestialBody, CoordinateSystem, Location};
+use aztro_core::{   AstronomicalResult, BirthInfo,  CelestialBody, CoordinateSystem, Location};
 use chrono::{TimeZone, Utc};
  
 
