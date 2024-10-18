@@ -382,7 +382,7 @@ pub struct CelestialCoordinates {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HousePosition {
+pub struct HouseCusp {
     pub house: House,
     pub sign: ZodiacSign,
     pub degree: f64,
@@ -515,8 +515,8 @@ impl AyanamsaInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChartInfo {
     pub chart_type: ChartType,
-    pub ascendant: HousePosition,
-    pub houses: Vec<HousePosition>,
+    pub ascendant: HouseCusp,
+    pub houses: Vec<HouseCusp>,
     pub planets: Vec<PlanetPosition>,
 }
 
@@ -1410,7 +1410,7 @@ impl SwissEph {
         latitude: f64,
         longitude: f64,
         house_system: ChartType,
-    ) -> Result<Vec<HousePosition>, CalculationError> {
+    ) -> Result<Vec<HouseCusp>, CalculationError> {
         let hsys = match house_system {
             ChartType::Rasi => SE_HS_PLACIDUS,
             ChartType::Navamsa => SE_HS_NAVAMSA,
@@ -1452,8 +1452,8 @@ impl SwissEph {
             });
         }
 
-        let house_positions: Vec<HousePosition> = (1..=12)
-            .map(|i| HousePosition {
+        let house_positions: Vec<HouseCusp> = (1..=12)
+            .map(|i| HouseCusp {
                 house: House::from_index(i).unwrap(),
                 sign: Self::get_zodiac_sign(cusps[i]),
                 degree: cusps[i] % 30.0,
@@ -1470,7 +1470,7 @@ impl SwissEph {
         latitude: f64,
         longitude: f64,
         house_system: ChartType,
-    ) -> Result<HousePosition, CalculationError> {
+    ) -> Result<HouseCusp, CalculationError> {
         let hsys = match house_system {
             ChartType::Rasi => SE_HS_PLACIDUS,
             ChartType::Navamsa => SE_HS_NAVAMSA,
@@ -1508,7 +1508,7 @@ impl SwissEph {
 
         let ascendant_degree = ascmc[0];
         let sign = Self::get_zodiac_sign(ascendant_degree);
-        Ok(HousePosition {
+        Ok(HouseCusp {
             house: House::First,
             sign,
             degree: ascendant_degree % 30.0,
