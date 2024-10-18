@@ -1,6 +1,6 @@
 // src/main.rs
 
-use chrono::{DateTime, Datelike, Duration as ChronoDuration, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, Duration as ChronoDuration, FixedOffset, Local, TimeZone, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
@@ -9,6 +9,7 @@ use std::fmt;
 use std::io::Cursor;
 use std::os::raw::{c_char, c_double, c_int};
 use std::sync::Once;
+use std::time::Duration;
 use tempfile::NamedTempFile;
 
 // ---------------------------
@@ -100,7 +101,7 @@ impl House {
             _ => None,
         }
     }
-    
+
     pub fn all() -> impl Iterator<Item = House> {
         (1..=12).map(House::from_index).flatten()
     }
@@ -263,6 +264,12 @@ pub enum PlanetaryState {
     Direct,
     Benefic,
     Malefic,
+}
+
+impl fmt::Display for PlanetaryState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -533,7 +540,15 @@ pub struct PlanetPosition {
 }
 
 #[derive(Debug, Clone)]
+pub enum Gender {
+    Male,
+    Female,
+}
+
+#[derive(Debug, Clone)]
 pub struct Report {
+    pub name: String,
+    pub gender: Gender,
     pub birth_info: BirthInfo,
     pub ayanamsa: AyanamsaInfo,
     pub charts: Vec<ChartInfo>,
@@ -549,16 +564,29 @@ pub struct Report {
     pub remedial_measures: Vec<RemedialMeasure>,
 }
 
+ 
 impl Report {
-    pub fn calculate(birth_info: &BirthInfo, ephemeris: &SwissEph) -> Result<Self, CalculationError> {
+    pub fn calculate(
+        name: impl AsRef<str>,
+        birth: impl Into<BirthInfo>,
+        gender: impl Into<Gender>,
+    ) -> Result<Self, CalculationError> {
+        let name = name.as_ref();
+        let birth_info = birth.into();
+        let gender = gender.into();
+        let ephemeris = SwissEph::new().unwrap();
+        let birth_info = BirthInfo {
+            date_time: birth_info.date_time,
+            location: birth_info.location,
+        };
         // Calculate the ayanamsa
         let ayanamsa = AyanamsaInfo::calculate(date_to_julian_day(birth_info.date_time));
 
         // Calculate the chart
-        let chart = ephemeris.calculate_chart(birth_info)?;
+        let chart = ephemeris.calculate_chart(&birth_info)?;
 
         // Calculate the dashas
-        let dashas = ephemeris.calculate_dasha(birth_info)?;
+        let dashas = ephemeris.calculate_dasha(&birth_info)?;
 
         // Calculate the yogas
         let yogas = ephemeris.calculate_yogas(&chart);
@@ -589,6 +617,8 @@ impl Report {
         let remedial_measures = ephemeris.suggest_remedial_measures(&chart);
 
         Ok(Self {
+            name: name.to_string(),
+            gender,
             birth_info: birth_info.clone(),
             ayanamsa,
             charts: vec![chart],
@@ -604,7 +634,160 @@ impl Report {
             remedial_measures,
         })
     }
-}
+
+ 
+    pub fn pretty_print(&self) {
+        const RESET: &str   = "\x1b[0m";
+        const BOLD: &str    = "\x1b[1m";
+        const CYAN: &str    = "\x1b[36m";
+        const MAGENTA: &str = "\x1b[35m";
+        const YELLOW: &str  = "\x1b[33m";
+        const GREEN: &str   = "\x1b[32m";
+        const BLUE: &str    = "\x1b[34m";
+        const RED: &str     = "\x1b[31m";
+    
+        let c = |text: &str, color: &str| format!("{}{}{}", color, text, RESET);
+    
+        println!("╭───────────────────────── {} ─────────────────────────╮", c("ॐ", CYAN));
+        
+        // Basic Information
+        println!("│ Name: {:<40} Gender: {:<24} │", 
+            c(&self.name, MAGENTA), 
+            c(&format!("{:?}", self.gender), BLUE)
+        );
+        println!("│ Date: {:<40} Location: {:.2}°N, {:.2}°E{:<13} │", 
+            c(&self.birth_info.date_time.format("%Y-%m-%d %H:%M:%S").to_string(), YELLOW),
+            self.birth_info.location.latitude, 
+            self.birth_info.location.longitude,
+            ""
+        );
+        
+        println!("├─────────────────────────────────────────────────────────────────┤");
+        
+        // Ascendant and Houses
+        let ascendant = &self.charts[0].ascendant;
+        println!("│ {:<25} │ {:<25} │ {:<25} │", 
+            c("House", CYAN), 
+            c("Sign", GREEN), 
+            c("Degree", YELLOW)
+        );
+        println!("├──────────────────────┼────────────────────┼────────────────────┤");
+        println!("│ {:<25} │ {:<25} │ {:<25.1} │", 
+            c("Ascendant", BLUE), 
+            c(&format!("{:?}", ascendant.sign), GREEN), 
+            ascendant.degree
+        );
+        for house in &self.charts[0].houses {
+            println!("│ {:<25} │ {:<25} │ {:<25.1} │", 
+                c(&format!("{:?}", house.house), BLUE),
+                c(&format!("{:?}", house.sign), GREEN),
+                house.degree
+            );
+        }
+        
+        println!("├─────────────────────────────────────────────────────────────────┤");
+        
+        // Planets
+        println!("│ {:<20} │ {:<20} │ {:<20} │ {:<20} │ {:<20} │ {:<20} │ {:<20} │", 
+            c("Planet", CYAN), c("Sign", GREEN), c("Degree", YELLOW), c("Retro", RED), 
+            c("House", BLUE), c("Nakshatra", MAGENTA), c("State", CYAN)
+        );
+        println!("├──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┼──────────────────┤");
+        for planet in &self.charts[0].planets {
+            let retrograde = if planet.retrograde { "R" } else { " " };
+            let state = self.planetary_states.get(&planet.planet).unwrap();
+            println!("│ {:<20} │ {:<20} │ {:<20.1} │ {:<20} │ {:<20} │ {:<20} │ {:<20} │",
+                c(&format!("{:?}", planet.planet), BLUE),
+                c(&format!("{:?}", planet.sign), GREEN),
+                planet.longitude % 30.0,
+                c(retrograde, RED),
+                c(&format!("{:?}", planet.house), YELLOW),
+                c(&format!("{:?}", planet.nakshatra.nakshatra), MAGENTA),
+                c(&state.to_string(), CYAN)
+            );
+        }
+        
+        println!("├─────────────────────────────────────────────────────────────────┤");
+        
+        // Nakshatras
+        println!("│ {:<20} │ {:<20} │ {:<20} │ {:<25} │", 
+            c("Nakshatra", MAGENTA), c("Pada", YELLOW), c("Lord", BLUE), c("Degree", GREEN)
+        );
+        println!("├──────────────────┼──────────────────┼──────────────────┼─────────────────────┤");
+        for nakshatra in &self.nakshatras {
+            println!("│ {:<20} │ {:<20} │ {:<20} │ {:<25.2} │", 
+                c(&format!("{:?}", nakshatra.nakshatra), MAGENTA),
+                nakshatra.pada,
+                c(&format!("{:?}", nakshatra.lord), BLUE),
+                nakshatra.degree
+            );
+        }
+        
+        println!("├─────────────────────────────────────────────────────────────────┤");
+        
+        // Dasha
+        println!("│ {:<20} │ {:<20} │ {:<35} │", 
+            c("Dasha", CYAN), c("Planet", BLUE), c("Period", YELLOW)
+        );
+        println!("├──────────────────┼──────────────────┼───────────────────────────────────┤");
+        println!("│ {:<20} │ {:<20} │ {:<35} │",
+            c("Maha", MAGENTA),
+            c(&format!("{:?}", self.dashas.maha_dasha), BLUE),
+            c(&format!("{} to {}", 
+                self.dashas.maha_dasha_start.format("%Y-%m-%d"),
+                self.dashas.maha_dasha_end.format("%Y-%m-%d")
+            ), YELLOW)
+        );
+        println!("│ {:<20} │ {:<20} │ {:<35} │",
+            c("Antar", MAGENTA),
+            c(&format!("{:?}", self.dashas.antar_dasha), BLUE),
+            c(&format!("{} to {}", 
+                self.dashas.antar_dasha_start.format("%Y-%m-%d"),
+                self.dashas.antar_dasha_end.format("%Y-%m-%d")
+            ), YELLOW)
+        );
+        println!("│ {:<20} │ {:<20} │ {:<35} │",
+            c("Pratyantar", MAGENTA),
+            c(&format!("{:?}", self.dashas.pratyantar_dasha), BLUE),
+            c(&format!("{} to {}", 
+                self.dashas.pratyantar_dasha_start.format("%Y-%m-%d"),
+                self.dashas.pratyantar_dasha_end.format("%Y-%m-%d")
+            ), YELLOW)
+        );
+        
+        println!("├─────────────────────────────────────────────────────────────────┤");
+        
+        // Yogas
+        println!("│ {:<30} │ {:<20} │ {:<25} │", 
+            c("Yoga", GREEN), c("Strength", YELLOW), c("Planets", BLUE)
+        );
+        println!("├──────────────────────────────────┼──────────────────┼─────────────────────┤");
+        for yoga in &self.yogas {
+            println!("│ {:<30} │ {:<20.2} │ {:<25} │", 
+                c(&yoga.yoga.name, GREEN),
+                yoga.strength,
+                c(&format!("{:?}", yoga.involved_planets), BLUE)
+            );
+        }
+        
+        println!("├─────────────────────────────────────────────────────────────────┤");
+        
+        // Special Lagnas
+        println!("│ {:<30} │ {:<45} │", 
+            c("Special Lagna", CYAN), c("Degree", YELLOW)
+        );
+        println!("├──────────────────────────────────┼─────────────────────────────────────┤");
+        for (lagna, degree) in &self.special_lagnas {
+            println!("│ {:<30} │ {:<45.2} │", 
+                c(&format!("{:?}", lagna), CYAN),
+                degree
+            );
+        }
+        
+        println!("╰─────────────────────────────────────────────────────────────────╯");
+    }
+  
+  }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BirthInfo {
@@ -612,49 +795,171 @@ pub struct BirthInfo {
     pub location: Location,
 }
 
-impl BirthInfo {
-    pub fn generate_report(&self) -> Result<Report, CalculationError> {
-        if let Ok(eph) = SwissEph::new() {
-            Report::calculate(&self, &eph)
-        } else {
-            Err(CalculationError {
-                code: -1,
-                message: "Failed to initialize Swiss Ephemeris".to_string(),
-            })
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
+    pub timezone: f32,
 }
 
 impl Location {
-    pub fn new(latitude: f64, longitude: f64) -> Self {
-        Location { latitude, longitude }
+    pub fn new(latitude: f64, longitude: f64 , timezone: f32) -> Self {
+        Location {
+            latitude,
+            longitude,
+            timezone,
+        }
     }
 
-    pub fn delhi() -> Self { Location { latitude: 28.6139, longitude: 77.2090 } }
-    pub fn mumbai() -> Self { Location { latitude: 19.0760, longitude: 72.8777 } }
-    pub fn bangalore() -> Self { Location { latitude: 12.9716, longitude: 77.5946 } }
-    pub fn chennai() -> Self { Location { latitude: 13.0827, longitude: 80.2707 } }
-    pub fn kannur() -> Self { Location { latitude: 11.8740, longitude: 75.3600 } }
-    pub fn kolkata() -> Self { Location { latitude: 22.5052, longitude: 87.3616 } }
-    pub fn abu_dhabi() -> Self { Location { latitude: 24.4667, longitude: 54.3667 } }
-    pub fn dubai() -> Self { Location { latitude: 25.276987, longitude: 55.296234 } }
-    pub fn sharjah() -> Self { Location { latitude: 25.3550, longitude: 55.4000 } }
-    pub fn malappuram() -> Self { Location { latitude: 10.7900, longitude: 76.0700 } }
-    pub fn kochi() -> Self { Location { latitude: 9.9312, longitude: 76.2673 } }
-    pub fn kollam() -> Self { Location { latitude: 8.8857, longitude: 76.5881 } }
-    pub fn thrissur() -> Self { Location { latitude: 10.522, longitude: 76.2100 } }
-    pub fn kozhikode() -> Self { Location { latitude: 11.2588, longitude: 75.7804 } }
-    pub fn wayanad() -> Self { Location { latitude: 11.6900, longitude: 75.8900 } }
-    pub fn munnar() -> Self { Location { latitude: 10.0000, longitude: 77.0667 } }
-    pub fn idukki() -> Self { Location { latitude: 10.0000, longitude: 77.0667 } }
-    pub fn kottayam() -> Self { Location { latitude: 10.0000, longitude: 76.5000 } }
-    pub fn alappuzha() -> Self { Location { latitude: 9.4900, longitude: 76.3200 } }
+    pub fn delhi() -> Self {
+        Location {
+            latitude: 28.6139,
+            longitude: 77.2090,
+            timezone:5.5
+        }
+    }
+    pub fn mumbai() -> Self {
+        Location {
+            latitude: 19.0760,
+            longitude: 72.8777,
+            timezone:5.5
+        }
+    }
+    pub fn bangalore() -> Self {
+        Location {
+            latitude: 12.9716,
+            longitude: 77.5946,
+            timezone:5.5
+        }
+    }
+    pub fn chennai() -> Self {
+        Location {
+            latitude: 13.0827,
+            longitude: 80.2707,
+            timezone:5.5
+        }
+    }
+    pub fn kannur() -> Self {
+        Location {
+            latitude: 11.8740,
+            longitude: 75.3600,
+            timezone:5.5
+        }
+    }
+    pub fn kolkata() -> Self {
+        Location {
+            latitude: 22.5052,
+            longitude: 87.3616,
+            timezone:5.5
+        }
+    }
+    pub fn abu_dhabi() -> Self {
+        Location {
+            latitude: 24.4667,
+            longitude: 54.3667,
+            timezone: 4.0,
+        }
+    }
+    pub fn dubai() -> Self {
+        Location {
+            latitude: 25.276987,
+            longitude: 55.296234,
+            timezone: 4.0,
+        }
+    }
+    pub fn sharjah() -> Self {
+        Location {
+            latitude: 25.3550,
+            longitude: 55.4000,
+            timezone: 4.0,
+        }
+    }
+    pub fn malappuram() -> Self {
+        Location {
+            latitude: 10.7900,
+            longitude: 76.0700,
+            timezone:5.5
+        }
+    }
+    pub fn kochi() -> Self {
+        Location {
+            latitude: 9.9312,
+            longitude: 76.2673,
+            timezone:5.5
+        }
+    }
+    pub fn kollam() -> Self {
+        Location {
+            latitude: 8.8857,
+            longitude: 76.5881,
+            timezone:5.5
+        }
+    }
+    pub fn thrissur() -> Self {
+        Location {
+            latitude: 10.522,
+            longitude: 76.2100,
+            timezone:5.5
+        }
+    }
+    pub fn kozhikode() -> Self {
+        Location {
+            latitude: 11.2588,
+            longitude: 75.7804,
+            timezone:5.5
+        }
+    }
+    pub fn wayanad() -> Self {
+        Location {
+            latitude: 11.6900,
+            longitude: 75.8900,
+            timezone:5.5
+        }
+    }
+    pub fn munnar() -> Self {
+        Location {
+            latitude: 10.0000,
+            longitude: 77.0667,
+            timezone:5.5
+        }
+    }
+    pub fn idukki() -> Self {
+        Location {
+            latitude: 10.0000,
+            longitude: 77.0667,
+            timezone:5.5
+        }
+    }
+    pub fn kottayam() -> Self {
+        Location {
+            latitude: 10.0000,
+            longitude: 76.5000,
+            timezone:5.5
+        }
+    }
+    pub fn alappuzha() -> Self {
+        Location {
+            latitude: 9.4900,
+            longitude: 76.3200,
+            timezone:5.5
+        }
+    }
+
+    pub fn born_at(self, year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> BirthInfo {
+        // Create DateTime<Utc> from input
+        let mut date_time = Utc.with_ymd_and_hms(year, month, day, hour, minute, second).unwrap();
+        let timezone_offset = FixedOffset::east_opt((self.timezone * 60.0 * 60.0) as i32).unwrap();
+        date_time =date_time - timezone_offset;
+
+        BirthInfo {
+            date_time,
+            location: self,
+        }
+    }
+    
+
+
+
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -738,7 +1043,9 @@ pub enum AstrologyError {
 impl fmt::Display for AstrologyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AstrologyError::CalculationError(err) => write!(f, "Calculation Error {}: {}", err.code, err.message),
+            AstrologyError::CalculationError(err) => {
+                write!(f, "Calculation Error {}: {}", err.code, err.message)
+            }
             AstrologyError::EphemerisError(msg) => write!(f, "Ephemeris Error: {}", msg),
             AstrologyError::InvalidInput(msg) => write!(f, "Invalid Input: {}", msg),
             AstrologyError::UnknownError(msg) => write!(f, "Unknown Error: {}", msg),
@@ -758,11 +1065,7 @@ mod bindings {
     extern "C" {
         // Initialize and close Swiss Ephemeris
         pub fn swe_set_ephe_path(path: *const c_char) -> c_int;
-        pub fn swe_set_sid_mode(
-            sid_mode: c_int,
-            t0: c_double,
-            ayan_t0: c_double,
-        ) -> c_int;
+        pub fn swe_set_sid_mode(sid_mode: c_int, t0: c_double, ayan_t0: c_double) -> c_int;
         pub fn swe_close();
 
         // Calculate planetary positions
@@ -898,10 +1201,10 @@ impl SwissEph {
         house_system: ChartType,
     ) -> Result<House, CalculationError> {
         let hsys = match house_system {
-            ChartType::Rasi => SE_HS_PLACIDUS, // Placidus
+            ChartType::Rasi => SE_HS_PLACIDUS,   // Placidus
             ChartType::Navamsa => SE_HS_NAVAMSA, // Navamsa
-            ChartType::Hora => SE_HS_HORA, // Hora
-            // Add other house systems as needed
+            ChartType::Hora => SE_HS_HORA,       // Hora
+                                                  // Add other house systems as needed
         };
 
         let mut cusps: [c_double; 13] = [0.0; 13];
@@ -988,7 +1291,11 @@ impl SwissEph {
     }
 
     pub fn calculate_nakshatras(&self, chart_info: &ChartInfo) -> Vec<NakshatraInfo> {
-        chart_info.planets.iter().map(|planet| self.calculate_nakshatra(planet.longitude)).collect()
+        chart_info
+            .planets
+            .iter()
+            .map(|planet| self.calculate_nakshatra(planet.longitude))
+            .collect()
     }
 
     pub fn get_nakshatra_lord(&self, nakshatra: Nakshatra) -> CelestialBody {
@@ -1074,8 +1381,8 @@ impl SwissEph {
         {
             let current_dasha = dasha_sequence[index];
             let years = dasha_balance_years;
-            let maha_dasha_end = maha_dasha_start
-                + ChronoDuration::seconds((years * 365.25 * 86400.0) as i64);
+            let maha_dasha_end =
+                maha_dasha_start + ChronoDuration::seconds((years * 365.25 * 86400.0) as i64);
             maha_dasha_periods.push((current_dasha, maha_dasha_start, maha_dasha_end));
             maha_dasha_start = maha_dasha_end;
             index = (index + 1) % dasha_sequence.len();
@@ -1121,8 +1428,8 @@ impl SwissEph {
 
             let antar_dasha_duration = maha_dasha_duration * (antar_dasha_years / 120.0);
 
-            let antar_dasha_end = antar_dasha_start
-                + ChronoDuration::seconds(antar_dasha_duration as i64);
+            let antar_dasha_end =
+                antar_dasha_start + ChronoDuration::seconds(antar_dasha_duration as i64);
 
             antar_dasha_periods.push((antar_dasha, antar_dasha_start, antar_dasha_end));
 
@@ -1151,10 +1458,14 @@ impl SwissEph {
 
             let pratyantar_dasha_duration = antar_dasha_duration * (pratyantar_dasha_years / 120.0);
 
-            let pratyantar_dasha_end = pratyantar_dasha_start
-                + ChronoDuration::seconds(pratyantar_dasha_duration as i64);
+            let pratyantar_dasha_end =
+                pratyantar_dasha_start + ChronoDuration::seconds(pratyantar_dasha_duration as i64);
 
-            pratyantar_dasha_periods.push((pratyantar_dasha, pratyantar_dasha_start, pratyantar_dasha_end));
+            pratyantar_dasha_periods.push((
+                pratyantar_dasha,
+                pratyantar_dasha_start,
+                pratyantar_dasha_end,
+            ));
 
             pratyantar_dasha_start = pratyantar_dasha_end;
         }
@@ -1164,7 +1475,8 @@ impl SwissEph {
             .find(|&&(_, start, end)| now >= start && now < end)
             .unwrap_or(&pratyantar_dasha_periods[0]);
 
-        let (pratyantar_dasha, pratyantar_dasha_start, pratyantar_dasha_end) = *current_pratyantar_dasha;
+        let (pratyantar_dasha, pratyantar_dasha_start, pratyantar_dasha_end) =
+            *current_pratyantar_dasha;
 
         Ok(DashaInfo {
             maha_dasha,
@@ -1179,7 +1491,6 @@ impl SwissEph {
         })
     }
 
-    
     pub fn calculate_planetary_states(
         &self,
         chart_info: &ChartInfo,
@@ -1213,13 +1524,34 @@ impl SwissEph {
         let own_signs = [
             (CelestialBody::Sun, vec![ZodiacSign::Leo]),
             (CelestialBody::Moon, vec![ZodiacSign::Cancer]),
-            (CelestialBody::Mars, vec![ZodiacSign::Aries, ZodiacSign::Scorpio]),
-            (CelestialBody::Mercury, vec![ZodiacSign::Gemini, ZodiacSign::Virgo]),
-            (CelestialBody::Jupiter, vec![ZodiacSign::Sagittarius, ZodiacSign::Pisces]),
-            (CelestialBody::Venus, vec![ZodiacSign::Taurus, ZodiacSign::Libra]),
-            (CelestialBody::Saturn, vec![ZodiacSign::Capricorn, ZodiacSign::Aquarius]),
-            (CelestialBody::Rahu, vec![ZodiacSign::Gemini, ZodiacSign::Virgo]),
-            (CelestialBody::Ketu, vec![ZodiacSign::Sagittarius, ZodiacSign::Pisces]),
+            (
+                CelestialBody::Mars,
+                vec![ZodiacSign::Aries, ZodiacSign::Scorpio],
+            ),
+            (
+                CelestialBody::Mercury,
+                vec![ZodiacSign::Gemini, ZodiacSign::Virgo],
+            ),
+            (
+                CelestialBody::Jupiter,
+                vec![ZodiacSign::Sagittarius, ZodiacSign::Pisces],
+            ),
+            (
+                CelestialBody::Venus,
+                vec![ZodiacSign::Taurus, ZodiacSign::Libra],
+            ),
+            (
+                CelestialBody::Saturn,
+                vec![ZodiacSign::Capricorn, ZodiacSign::Aquarius],
+            ),
+            (
+                CelestialBody::Rahu,
+                vec![ZodiacSign::Gemini, ZodiacSign::Virgo],
+            ),
+            (
+                CelestialBody::Ketu,
+                vec![ZodiacSign::Sagittarius, ZodiacSign::Pisces],
+            ),
         ];
 
         for planet_position in &chart_info.planets {
@@ -1544,7 +1876,9 @@ impl SwissEph {
             let result =
                 self.calculate(coord_system, julian_day, planet, &[CalculationFlag::Speed])?;
             let (longitude, latitude, speed) = match result {
-                AstronomicalResult::CelestialBody(info) => (info.longitude, info.latitude, info.speed_longitude),
+                AstronomicalResult::CelestialBody(info) => {
+                    (info.longitude, info.latitude, info.speed_longitude)
+                }
                 _ => continue,
             };
 
@@ -1552,7 +1886,7 @@ impl SwissEph {
                 ChartType::Rasi => longitude,
                 ChartType::Navamsa => self.calculate_navamsa(longitude),
                 ChartType::Hora => (longitude * 2.0) % 360.0, // Example for Hora
-                // Add more chart types as needed
+                                                              // Add more chart types as needed
             };
 
             let sign = Self::get_zodiac_sign(adjusted_longitude);
@@ -1582,9 +1916,6 @@ impl SwissEph {
 
         Ok(positions)
     }
-
- 
- 
 
     // ---------------------------
     // ## Compatibility Calculations
@@ -1623,12 +1954,22 @@ impl SwissEph {
                         condition: Condition {
                             description: "Conjunction of lords of 9th and 10th houses".to_string(),
                             check: |chart| {
-                                let ninth_lord = chart.planets.iter().find(|p| p.house == House::Ninth).map(|p| p.planet);
-                                let tenth_lord = chart.planets.iter().find(|p| p.house == House::Tenth).map(|p| p.planet);
+                                let ninth_lord = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.house == House::Ninth)
+                                    .map(|p| p.planet);
+                                let tenth_lord = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.house == House::Tenth)
+                                    .map(|p| p.planet);
                                 match (ninth_lord, tenth_lord) {
                                     (Some(n), Some(t)) => {
-                                        let p1 = chart.planets.iter().find(|p| p.planet == n).unwrap();
-                                        let p2 = chart.planets.iter().find(|p| p.planet == t).unwrap();
+                                        let p1 =
+                                            chart.planets.iter().find(|p| p.planet == n).unwrap();
+                                        let p2 =
+                                            chart.planets.iter().find(|p| p.planet == t).unwrap();
                                         (p1.longitude - p2.longitude).abs() < 10.0
                                     }
                                     _ => false,
@@ -1660,10 +2001,21 @@ impl SwissEph {
                         condition: Condition {
                             description: "Jupiter in Kendra from Moon".to_string(),
                             check: |chart| {
-                                let j = chart.planets.iter().find(|p| p.planet == CelestialBody::Jupiter).unwrap();
-                                let m = chart.planets.iter().find(|p| p.planet == CelestialBody::Moon).unwrap();
+                                let j = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Jupiter)
+                                    .unwrap();
+                                let m = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Moon)
+                                    .unwrap();
                                 let house_diff = (j.house as i32 - m.house as i32).abs() % 12;
-                                house_diff == 4 || house_diff == 7 || house_diff == 10 || house_diff == 1
+                                house_diff == 4
+                                    || house_diff == 7
+                                    || house_diff == 10
+                                    || house_diff == 1
                             },
                         },
                         effects: Effects {
@@ -1690,8 +2042,16 @@ impl SwissEph {
                         condition: Condition {
                             description: "Sun and Mercury in the same house".to_string(),
                             check: |chart| {
-                                let s = chart.planets.iter().find(|p| p.planet == CelestialBody::Sun).unwrap();
-                                let m = chart.planets.iter().find(|p| p.planet == CelestialBody::Mercury).unwrap();
+                                let s = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Sun)
+                                    .unwrap();
+                                let m = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Mercury)
+                                    .unwrap();
                                 s.house == m.house
                             },
                         },
@@ -1720,10 +2080,21 @@ impl SwissEph {
                         condition: Condition {
                             description: "Jupiter in Kendra from Moon".to_string(),
                             check: |chart| {
-                                let j = chart.planets.iter().find(|p| p.planet == CelestialBody::Jupiter).unwrap();
-                                let m = chart.planets.iter().find(|p| p.planet == CelestialBody::Moon).unwrap();
+                                let j = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Jupiter)
+                                    .unwrap();
+                                let m = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Moon)
+                                    .unwrap();
                                 let house_diff = (j.house as i32 - m.house as i32).abs() % 12;
-                                house_diff == 4 || house_diff == 7 || house_diff == 10 || house_diff == 1
+                                house_diff == 4
+                                    || house_diff == 7
+                                    || house_diff == 10
+                                    || house_diff == 1
                             },
                         },
                         effects: Effects {
@@ -1750,8 +2121,15 @@ impl SwissEph {
                         condition: Condition {
                             description: "Venus in a Kendra house".to_string(),
                             check: |chart| {
-                                let v = chart.planets.iter().find(|p| p.planet == CelestialBody::Venus).unwrap();
-                                matches!(v.house, House::First | House::Fourth | House::Seventh | House::Tenth)
+                                let v = chart
+                                    .planets
+                                    .iter()
+                                    .find(|p| p.planet == CelestialBody::Venus)
+                                    .unwrap();
+                                matches!(
+                                    v.house,
+                                    House::First | House::Fourth | House::Seventh | House::Tenth
+                                )
                             },
                         },
                         effects: Effects {
@@ -1773,8 +2151,18 @@ impl SwissEph {
         let mut special_lagnas = HashMap::new();
 
         let ascendant_longitude = chart.ascendant.degree;
-        let sun_longitude = chart.planets.iter().find(|p| p.planet == CelestialBody::Sun).unwrap().longitude;
-        let moon_longitude = chart.planets.iter().find(|p| p.planet == CelestialBody::Moon).unwrap().longitude;
+        let sun_longitude = chart
+            .planets
+            .iter()
+            .find(|p| p.planet == CelestialBody::Sun)
+            .unwrap()
+            .longitude;
+        let moon_longitude = chart
+            .planets
+            .iter()
+            .find(|p| p.planet == CelestialBody::Moon)
+            .unwrap()
+            .longitude;
 
         // Calculate Hora Lagna
         let hora_lagna = (ascendant_longitude + (sun_longitude - moon_longitude)) % 360.0;
@@ -1790,15 +2178,15 @@ impl SwissEph {
 
         // Calculate Sree Lagna
         let sree_lagna = (ascendant_longitude + moon_longitude) % 360.0;
-            special_lagnas.insert(SpecialLagna::Sree, sree_lagna);
+        special_lagnas.insert(SpecialLagna::Sree, sree_lagna);
 
         // Calculate Pranapada Lagna
-            let pranapada_lagna = (ascendant_longitude + (sun_longitude - moon_longitude) * 7.0) % 360.0;
+        let pranapada_lagna =
+            (ascendant_longitude + (sun_longitude - moon_longitude) * 7.0) % 360.0;
         special_lagnas.insert(SpecialLagna::Pranapada, pranapada_lagna);
 
         special_lagnas
     }
-
 
     fn calculate_kuta_points(&self, chart1: &ChartInfo, chart2: &ChartInfo) -> u32 {
         let mut points = 0;
@@ -2006,11 +2394,7 @@ impl SwissEph {
             ),
             (
                 CelestialBody::Jupiter,
-                vec![
-                    CelestialBody::Sun,
-                    CelestialBody::Moon,
-                    CelestialBody::Mars,
-                ],
+                vec![CelestialBody::Sun, CelestialBody::Moon, CelestialBody::Mars],
             ),
             (
                 CelestialBody::Venus,
@@ -2023,7 +2407,8 @@ impl SwissEph {
         ];
 
         friendships.iter().any(|&(p, ref friends)| {
-            (p == planet1 && friends.contains(&planet2)) || (p == planet2 && friends.contains(&planet1))
+            (p == planet1 && friends.contains(&planet2))
+                || (p == planet2 && friends.contains(&planet1))
         })
     }
 
@@ -2074,7 +2459,8 @@ impl SwissEph {
         ];
 
         neutral_relations.iter().any(|&(p, ref neutrals)| {
-            (p == planet1 && neutrals.contains(&planet2)) || (p == planet2 && neutrals.contains(&planet1))
+            (p == planet1 && neutrals.contains(&planet2))
+                || (p == planet2 && neutrals.contains(&planet1))
         })
     }
 
@@ -2111,8 +2497,13 @@ impl SwissEph {
 
     fn get_nadi(&self, sign: ZodiacSign) -> &'static str {
         match sign {
-            ZodiacSign::Aries | ZodiacSign::Cancer | ZodiacSign::Libra | ZodiacSign::Capricorn => "Aadi",
-            ZodiacSign::Taurus | ZodiacSign::Virgo | ZodiacSign::Sagittarius | ZodiacSign::Pisces => "Madhya",
+            ZodiacSign::Aries | ZodiacSign::Cancer | ZodiacSign::Libra | ZodiacSign::Capricorn => {
+                "Aadi"
+            }
+            ZodiacSign::Taurus
+            | ZodiacSign::Virgo
+            | ZodiacSign::Sagittarius
+            | ZodiacSign::Pisces => "Madhya",
             ZodiacSign::Gemini | ZodiacSign::Libra | ZodiacSign::Aquarius => "Antya",
             _ => "Unknown",
         }
@@ -2152,7 +2543,13 @@ impl SwissEph {
         }
 
         let current_julian_day = date_to_julian_day(Utc::now());
-        let sun_position = self.calculate(CoordinateSystem::Tropical, current_julian_day, CelestialBody::Sun, &[])
+        let sun_position = self
+            .calculate(
+                CoordinateSystem::Tropical,
+                current_julian_day,
+                CelestialBody::Sun,
+                &[],
+            )
             .unwrap_or(AstronomicalResult::CelestialBody(CelestialCoordinates {
                 longitude: 0.0,
                 latitude: 0.0,
@@ -2350,8 +2747,19 @@ impl SwissEph {
     pub fn calculate_chart(&self, birth_info: &BirthInfo) -> Result<ChartInfo, CalculationError> {
         let julian_day = date_to_julian_day(birth_info.date_time);
         let ayanamsa = self.calculate_ayanamsa(julian_day);
-        let houses = self.calculate_houses(CoordinateSystem::Sidereal, julian_day, birth_info.location.latitude, birth_info.location.longitude, ChartType::Rasi)?;
-        let planets = self.calculate_planet_positions(CoordinateSystem::Sidereal, julian_day, ChartType::Rasi, birth_info)?;
+        let houses = self.calculate_houses(
+            CoordinateSystem::Sidereal,
+            julian_day,
+            birth_info.location.latitude,
+            birth_info.location.longitude,
+            ChartType::Rasi,
+        )?;
+        let planets = self.calculate_planet_positions(
+            CoordinateSystem::Sidereal,
+            julian_day,
+            ChartType::Rasi,
+            birth_info,
+        )?;
 
         let ascendant = houses.first().cloned().ok_or(CalculationError {
             code: -1,
@@ -2365,8 +2773,15 @@ impl SwissEph {
             planets,
         })
     }
- 
-    fn calculate_house(&self, julian_day: f64, latitude: f64, longitude: f64, chart_type: ChartType, planet_longitude: f64) -> Result<House, CalculationError> {
+
+    fn calculate_house(
+        &self,
+        julian_day: f64,
+        latitude: f64,
+        longitude: f64,
+        chart_type: ChartType,
+        planet_longitude: f64,
+    ) -> Result<House, CalculationError> {
         let hsys = match chart_type {
             ChartType::Rasi => SE_HS_PLACIDUS,
             ChartType::Navamsa => SE_HS_NAVAMSA,
@@ -2406,7 +2821,6 @@ impl SwissEph {
             message: format!("Invalid house number: {}", house_number),
         })
     }
-
 
     pub fn is_house_compatible(&self, house1: House, house2: House) -> bool {
         let angle_diff = (house2 as i32 - house1 as i32 + 12) % 12;
@@ -2451,25 +2865,11 @@ impl SwissEph {
         strength
     }
 
-    pub fn calculate_house_lord_compatibility(&self, chart1: &ChartInfo, chart2: &ChartInfo) -> u32 {
-        let mut score = 0;
-
-        for house in House::all() {
-            let lord1 = self.get_house_lord(house);
-            let lord2 = self.get_house_lord(house); 
-
-            let strength1 = self.calculate_house_lord_strength(house, lord1);
-            let strength2 = self.calculate_house_lord_strength(house, lord2);
-
-            if self.is_house_compatible(house, house) {
-                score += (strength1 + strength2) as u32;
-            }
-        }
-
-        score
-    }
-
-    pub fn calculate_house_lord_compatibility_score(&self, chart1: &ChartInfo, chart2: &ChartInfo) -> u32 {
+    pub fn calculate_house_lord_compatibility(
+        &self,
+        chart1: &ChartInfo,
+        chart2: &ChartInfo,
+    ) -> u32 {
         let mut score = 0;
 
         for house in House::all() {
@@ -2487,7 +2887,27 @@ impl SwissEph {
         score
     }
 
-    
+    pub fn calculate_house_lord_compatibility_score(
+        &self,
+        chart1: &ChartInfo,
+        chart2: &ChartInfo,
+    ) -> u32 {
+        let mut score = 0;
+
+        for house in House::all() {
+            let lord1 = self.get_house_lord(house);
+            let lord2 = self.get_house_lord(house);
+
+            let strength1 = self.calculate_house_lord_strength(house, lord1);
+            let strength2 = self.calculate_house_lord_strength(house, lord2);
+
+            if self.is_house_compatible(house, house) {
+                score += (strength1 + strength2) as u32;
+            }
+        }
+
+        score
+    }
 }
 
 // ---------------------------
@@ -2554,12 +2974,13 @@ pub fn julian_day_to_date(jd: JulianDay) -> DateTime<Utc> {
         );
     }
 
-    Utc.ymd(year as i32, month as u32, day as u32).and_hms_micro(
-        hour as u32,
-        minute as u32,
-        second.floor() as u32,
-        ((second.fract() * 1_000_000.0) as u32),
-    )
+    Utc.ymd(year as i32, month as u32, day as u32)
+        .and_hms_micro(
+            hour as u32,
+            minute as u32,
+            second.floor() as u32,
+            ((second.fract() * 1_000_000.0) as u32),
+        )
 }
 
 pub fn calculate_ayanamsa(julian_day: JulianDay) -> AyanamsaInfo {
@@ -2570,5 +2991,3 @@ pub fn calculate_ayanamsa(julian_day: JulianDay) -> AyanamsaInfo {
         ayanamsa_value,
     }
 }
-
- 

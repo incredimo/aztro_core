@@ -1,19 +1,17 @@
-use aztro_core::{   AstronomicalResult, BirthInfo,  CelestialBody, CoordinateSystem, Location};
+use aztro_core::{   AstronomicalResult, BirthInfo, CelestialBody, CoordinateSystem, Gender, Location, Report};
 use chrono::{TimeZone, Utc};
  
 
 fn main() {
 
-    // aghil mohan 18th june 1991 07:10 AM , calicut kerala india
-    let birth_info = BirthInfo {
-        date_time: Utc.with_ymd_and_hms(1991, 6, 18, 7, 10, 0).unwrap(),
-        location: Location::kozhikode(),
-    };
+ 
+    let name = "Aghil Mohan";
 
+    let gender = Gender::Male;
 
+    let birth_info = Location::kozhikode().born_at(1991, 6, 18, 7, 10, 0);
 
-    match birth_info.generate_report() {
-        Ok(report) => println!("{:#?}", report),
-        Err(e) => eprintln!("Error: {:?}", e),
-    }
+    let report = Report::calculate(name, birth_info, gender).unwrap();
+
+    report.pretty_print();
 }
